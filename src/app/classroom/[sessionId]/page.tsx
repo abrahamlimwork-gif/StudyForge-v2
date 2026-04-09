@@ -12,9 +12,12 @@ export default function ClassroomPage() {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
   const jitsiContainerRef = useRef<HTMLDivElement>(null);
-  const [jitsiApi, setJitsiApi] = useState<any>(null);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Replace 'YOUR_APP_ID' with your actual 8x8 App ID
+  const APP_ID = "vpaas-magic-cookie-studio-7696342024";
+  const DOMAIN = "8x8.vc";
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -23,12 +26,12 @@ export default function ClassroomPage() {
   }, [user, isUserLoading, router]);
 
   useEffect(() => {
-    // Dynamically load Jitsi script for better reliability
+    // Dynamically load professional 8x8 Jitsi script
     const script = document.createElement('script');
-    script.src = "https://meet.jit.si/external_api.js";
+    script.src = `https://${DOMAIN}/${APP_ID}/external_api.js`;
     script.async = true;
     script.onload = () => setIsScriptLoaded(true);
-    script.onerror = () => setLoadError("Could not load the video service.");
+    script.onerror = () => setLoadError("Could not load the professional video service.");
     document.body.appendChild(script);
 
     return () => {
@@ -36,16 +39,18 @@ export default function ClassroomPage() {
         document.body.removeChild(script);
       }
     };
-  }, []);
+  }, [APP_ID]);
 
   useEffect(() => {
     if (!user || !isScriptLoaded || !jitsiContainerRef.current) return;
 
-    const domain = "meet.jit.si";
-    const uniqueRoomName = `StudyForge_${sessionId}_2026`.replace(/\s+/g, '_');
+    // Sanitize room name and prefix with App ID for 8x8
+    const cleanSessionId = typeof sessionId === 'string' ? sessionId.replace(/\s+/g, '_') : 'DefaultSession';
+    const roomName = `StudyForge_${cleanSessionId}_2026`;
+    const fullRoomName = `${APP_ID}/${roomName}`;
 
     const options = {
-      roomName: uniqueRoomName,
+      roomName: fullRoomName,
       width: "100%",
       height: "100%",
       parentNode: jitsiContainerRef.current,
@@ -71,17 +76,16 @@ export default function ClassroomPage() {
 
     try {
       // @ts-ignore
-      const api = new window.JitsiMeetExternalAPI(domain, options);
-      setJitsiApi(api);
+      const api = new window.JitsiMeetExternalAPI(DOMAIN, options);
 
       return () => {
         if (api) api.dispose();
       };
     } catch (error) {
       console.error("Jitsi initialization error:", error);
-      setLoadError("Failed to initialize classroom video.");
+      setLoadError("Failed to initialize professional classroom video.");
     }
-  }, [user, isScriptLoaded, sessionId]);
+  }, [user, isScriptLoaded, sessionId, APP_ID]);
 
   if (isUserLoading || !user) return null;
 
@@ -104,7 +108,7 @@ export default function ClassroomPage() {
           
           <div className="hidden sm:block">
             <h1 className="text-3xl font-headline font-black text-primary uppercase">
-              Live Classroom
+              Live Classroom (Pro)
             </h1>
           </div>
         </div>
@@ -126,7 +130,7 @@ export default function ClassroomPage() {
         {(!isScriptLoaded && !loadError) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-20 space-y-4">
             <Loader2 className="size-16 animate-spin text-secondary" />
-            <p className="text-white text-2xl font-bold uppercase">Preparing Video...</p>
+            <p className="text-white text-2xl font-bold uppercase">Preparing Pro Video...</p>
           </div>
         )}
 
@@ -145,7 +149,7 @@ export default function ClassroomPage() {
       <footer className="flex-grow bg-slate-50 flex items-center justify-center p-6 border-t">
         <div className="text-center space-y-2">
           <p className="text-2xl font-bold text-slate-700 uppercase">
-            Currently in Session
+            Managed 8x8 Professional Session
           </p>
           <p className="text-lg text-muted-foreground">
             Please ensure your camera and microphone are allowed.

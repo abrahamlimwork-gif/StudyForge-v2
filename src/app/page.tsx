@@ -6,28 +6,31 @@ import { Button } from '@/components/ui/button';
 import { ShieldCheck, Video, Info, Loader2 } from 'lucide-react';
 
 /**
- * Immediate Video Test Page
- * Bypasses Login to verify Jitsi integration at meet.jit.si
+ * Immediate Video Test Page (8x8 Professional Edition)
+ * Bypasses Login to verify Jitsi as a Service integration.
  */
 export default function TestClassroomPage() {
   const router = useRouter();
   const jitsiContainerRef = useRef<HTMLDivElement>(null);
-  const [jitsiApi, setJitsiApi] = useState<any>(null);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Replace 'YOUR_APP_ID' with your actual 8x8 App ID
+  const APP_ID = "vpaas-magic-cookie-studio-7696342024";
+  const DOMAIN = "8x8.vc";
+
   useEffect(() => {
-    // Dynamically load Jitsi script for better reliability in Next.js
+    // Dynamically load the professional 8x8 Jitsi script
     const script = document.createElement('script');
-    script.src = "https://meet.jit.si/external_api.js";
+    script.src = `https://${DOMAIN}/${APP_ID}/external_api.js`;
     script.async = true;
     script.onload = () => {
-      console.log("Jitsi API script loaded");
+      console.log("8x8 Jitsi API script loaded");
       setIsScriptLoaded(true);
     };
     script.onerror = () => {
-      console.error("Failed to load Jitsi API script");
-      setLoadError("The video service could not be reached. Please check your internet connection.");
+      console.error("Failed to load 8x8 Jitsi API script");
+      setLoadError("The professional video service could not be reached.");
     };
     document.body.appendChild(script);
 
@@ -36,17 +39,17 @@ export default function TestClassroomPage() {
         document.body.removeChild(script);
       }
     };
-  }, []);
+  }, [APP_ID]);
 
   useEffect(() => {
     if (!isScriptLoaded || !jitsiContainerRef.current) return;
 
-    // Configuration for meet.jit.si (100% Free Public Server)
-    const domain = "meet.jit.si";
-    const uniqueRoomName = "StudyForge_IBS_Valenzuela_Main_2026";
+    const roomName = "StudyForge_IBS_Valenzuela_Main_2026";
+    // For 8x8, the roomName must be prefixed with the App ID
+    const fullRoomName = `${APP_ID}/${roomName}`;
 
     const options = {
-      roomName: uniqueRoomName,
+      roomName: fullRoomName,
       width: "100%",
       height: "100%",
       parentNode: jitsiContainerRef.current,
@@ -72,17 +75,16 @@ export default function TestClassroomPage() {
 
     try {
       // @ts-ignore
-      const api = new window.JitsiMeetExternalAPI(domain, options);
-      setJitsiApi(api);
+      const api = new window.JitsiMeetExternalAPI(DOMAIN, options);
 
       return () => {
         if (api) api.dispose();
       };
     } catch (error) {
       console.error("Jitsi initialization error:", error);
-      setLoadError("Could not start the video classroom. Please refresh.");
+      setLoadError("Could not start the professional classroom. Please refresh.");
     }
-  }, [isScriptLoaded]);
+  }, [isScriptLoaded, APP_ID]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background overflow-x-hidden">
@@ -94,10 +96,10 @@ export default function TestClassroomPage() {
           </div>
           <div>
             <h1 className="text-3xl font-headline font-black uppercase tracking-tight">
-              StudyForge Live Test
+              StudyForge Pro Test
             </h1>
             <p className="text-sm opacity-80 font-bold uppercase tracking-widest">
-              meet.jit.si • IBS Valenzuela 2026
+              8x8.vc • IBS Valenzuela 2026
             </p>
           </div>
         </div>
@@ -118,7 +120,7 @@ export default function TestClassroomPage() {
         </div>
       </div>
 
-      {/* Video Area - 80% height as requested */}
+      {/* Video Area */}
       <main className="w-full relative bg-slate-900" style={{ height: '80vh' }}>
         <div 
           id="jitsi-container" 
@@ -130,7 +132,7 @@ export default function TestClassroomPage() {
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-20 space-y-6">
             <Loader2 className="size-20 animate-spin text-secondary" />
             <p className="text-white text-3xl font-black font-headline uppercase tracking-wide">
-              Connecting to Classroom...
+              Connecting to Pro Server...
             </p>
           </div>
         )}
@@ -153,11 +155,10 @@ export default function TestClassroomPage() {
         )}
       </main>
 
-      {/* Info Footer for Seniors */}
       <footer className="flex-grow bg-white flex items-center justify-center p-8 border-t-2 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
         <div className="max-w-5xl w-full flex flex-col md:flex-row items-center justify-between gap-12">
           <div className="space-y-4 text-center md:text-left">
-            <h2 className="text-4xl font-black text-primary uppercase">Classroom Live</h2>
+            <h2 className="text-4xl font-black text-primary uppercase">8x8 Managed Classroom</h2>
             <p className="text-2xl text-slate-600 font-medium">
               Connected to: <span className="text-secondary font-bold underline">IBS Valenzuela 2026</span>
             </p>
