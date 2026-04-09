@@ -14,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -22,7 +22,7 @@ export default function RootLayout({
         {/* Using vpaas.jitsi.net script as requested */}
         <script src="https://vpaas.jitsi.net/external_api.js" async></script>
       </head>
-      <body className="font-body antialiased min-h-screen">
+      <body className="font-body antialiased min-h-screen" suppressHydrationWarning>
         <FirebaseClientProvider>
           {children}
           <Toaster />
