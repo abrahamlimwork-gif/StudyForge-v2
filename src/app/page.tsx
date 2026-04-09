@@ -1,40 +1,49 @@
-
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ShieldCheck, Video, Info } from 'lucide-react';
+import { ShieldCheck, Video, Info, Loader2 } from 'lucide-react';
 
 /**
- * Temporary Root Page for Immediate Video Testing
- * Bypasses Login/Landing to test Jitsi integration at vpaas.jitsi.net
+ * Immediate Video Test Page
+ * Bypasses Login to verify Jitsi integration at meet.jit.si
  */
 export default function TestClassroomPage() {
   const router = useRouter();
   const jitsiContainerRef = useRef<HTMLDivElement>(null);
   const [jitsiApi, setJitsiApi] = useState<any>(null);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if the Jitsi script is already loaded from layout.tsx
-    const checkScript = () => {
-      // @ts-ignore
-      if (window.JitsiMeetExternalAPI) {
-        setIsScriptLoaded(true);
-      } else {
-        setTimeout(checkScript, 500);
+    // Dynamically load Jitsi script for better reliability in Next.js
+    const script = document.createElement('script');
+    script.src = "https://meet.jit.si/external_api.js";
+    script.async = true;
+    script.onload = () => {
+      console.log("Jitsi API script loaded");
+      setIsScriptLoaded(true);
+    };
+    script.onerror = () => {
+      console.error("Failed to load Jitsi API script");
+      setLoadError("The video service could not be reached. Please check your internet connection.");
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
       }
     };
-    checkScript();
   }, []);
 
   useEffect(() => {
     if (!isScriptLoaded || !jitsiContainerRef.current) return;
 
-    // Configuration for vpaas.jitsi.net as requested
-    const domain = "vpaas.jitsi.net";
-    const uniqueRoomName = "StudyForge_IBS_Valenzuela_2026";
+    // Configuration for meet.jit.si (100% Free Public Server)
+    const domain = "meet.jit.si";
+    const uniqueRoomName = "StudyForge_IBS_Valenzuela_Main_2026";
 
     const options = {
       roomName: uniqueRoomName,
@@ -42,7 +51,7 @@ export default function TestClassroomPage() {
       height: "100%",
       parentNode: jitsiContainerRef.current,
       userInfo: {
-        displayName: "Tester User",
+        displayName: "Teacher Assistant (Test)",
         email: "test@studyforge.com",
       },
       configOverwrite: {
@@ -71,6 +80,7 @@ export default function TestClassroomPage() {
       };
     } catch (error) {
       console.error("Jitsi initialization error:", error);
+      setLoadError("Could not start the video classroom. Please refresh.");
     }
   }, [isScriptLoaded]);
 
@@ -87,7 +97,7 @@ export default function TestClassroomPage() {
               StudyForge Live Test
             </h1>
             <p className="text-sm opacity-80 font-bold uppercase tracking-widest">
-              vpaas.jitsi.net • IBS Valenzuela 2026
+              meet.jit.si • IBS Valenzuela 2026
             </p>
           </div>
         </div>
@@ -100,7 +110,7 @@ export default function TestClassroomPage() {
           <Button 
             variant="secondary" 
             size="lg" 
-            className="text-xl h-14 px-8 font-black shadow-md"
+            className="text-xl h-14 px-8 font-black shadow-md hover:bg-white"
             onClick={() => window.location.reload()}
           >
             REFRESH CALL
@@ -116,32 +126,49 @@ export default function TestClassroomPage() {
           className="w-full h-full border-b-4 border-primary/20" 
         />
         
-        {!isScriptLoaded && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-20 space-y-4">
-            <div className="size-16 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
-            <p className="text-white text-2xl font-bold">
-              Loading Video Service...
+        {(!isScriptLoaded && !loadError) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-20 space-y-6">
+            <Loader2 className="size-20 animate-spin text-secondary" />
+            <p className="text-white text-3xl font-black font-headline uppercase tracking-wide">
+              Connecting to Classroom...
             </p>
+          </div>
+        )}
+
+        {loadError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-20 p-8 text-center space-y-8">
+            <Info className="size-24 text-destructive" />
+            <div className="space-y-4">
+              <h2 className="text-4xl font-black text-white uppercase tracking-tight">System Notice</h2>
+              <p className="text-2xl text-slate-300 max-w-xl mx-auto font-medium">{loadError}</p>
+            </div>
+            <Button 
+              size="lg" 
+              className="h-20 px-12 text-3xl font-bold bg-secondary hover:bg-secondary/90" 
+              onClick={() => window.location.reload()}
+            >
+              TRY AGAIN
+            </Button>
           </div>
         )}
       </main>
 
       {/* Info Footer for Seniors */}
       <footer className="flex-grow bg-white flex items-center justify-center p-8 border-t-2 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-        <div className="max-w-4xl w-full flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="space-y-3 text-center md:text-left">
-            <h2 className="text-3xl font-black text-primary">Classroom is Ready</h2>
-            <p className="text-xl text-slate-600 font-medium">
-              You are currently testing the <span className="text-secondary font-bold">StudyForge_IBS_Valenzuela_2026</span> room.
+        <div className="max-w-5xl w-full flex flex-col md:flex-row items-center justify-between gap-12">
+          <div className="space-y-4 text-center md:text-left">
+            <h2 className="text-4xl font-black text-primary uppercase">Classroom Live</h2>
+            <p className="text-2xl text-slate-600 font-medium">
+              Connected to: <span className="text-secondary font-bold underline">IBS Valenzuela 2026</span>
             </p>
           </div>
           
-          <div className="bg-blue-50 p-6 rounded-2xl border-2 border-blue-100 flex items-start gap-4 max-w-md">
-            <Info className="size-8 text-blue-600 shrink-0 mt-1" />
-            <div className="space-y-1">
-              <p className="font-bold text-blue-900 text-lg">Senior Reminder:</p>
-              <p className="text-blue-800 leading-relaxed font-medium">
-                Make sure to click <strong>"Allow"</strong> if your browser asks for camera or microphone access.
+          <div className="bg-blue-50 p-8 rounded-3xl border-4 border-blue-100 flex items-start gap-6 max-w-lg shadow-sm">
+            <Info className="size-10 text-blue-600 shrink-0 mt-1" />
+            <div className="space-y-2">
+              <p className="font-black text-blue-900 text-2xl uppercase tracking-tight">Important Reminder:</p>
+              <p className="text-blue-800 leading-relaxed font-bold text-xl">
+                Please click the <span className="text-blue-600">"Allow"</span> button at the top of your screen for camera and microphone access.
               </p>
             </div>
           </div>

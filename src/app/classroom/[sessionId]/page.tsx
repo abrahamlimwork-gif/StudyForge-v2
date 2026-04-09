@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Loader2, Info } from 'lucide-react';
 
 export default function ClassroomPage() {
   const { sessionId } = useParams();
@@ -13,6 +13,8 @@ export default function ClassroomPage() {
   const router = useRouter();
   const jitsiContainerRef = useRef<HTMLDivElement>(null);
   const [jitsiApi, setJitsiApi] = useState<any>(null);
+  const [isScriptLoaded, setIsScriptLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -21,13 +23,26 @@ export default function ClassroomPage() {
   }, [user, isUserLoading, router]);
 
   useEffect(() => {
-    if (!user || !jitsiContainerRef.current) return;
+    // Dynamically load Jitsi script for better reliability
+    const script = document.createElement('script');
+    script.src = "https://meet.jit.si/external_api.js";
+    script.async = true;
+    script.onload = () => setIsScriptLoaded(true);
+    script.onerror = () => setLoadError("Could not load the video service.");
+    document.body.appendChild(script);
 
-    // Use vpaas.jitsi.net as requested
-    const domain = "vpaas.jitsi.net";
-    
-    // Fixed unique room name as requested
-    const uniqueRoomName = "StudyForge_IBS_Valenzuela_2026";
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user || !isScriptLoaded || !jitsiContainerRef.current) return;
+
+    const domain = "meet.jit.si";
+    const uniqueRoomName = `StudyForge_${sessionId}_2026`.replace(/\s+/g, '_');
 
     const options = {
       roomName: uniqueRoomName,
@@ -54,16 +69,19 @@ export default function ClassroomPage() {
       }
     };
 
-    // @ts-ignore
-    if (window.JitsiMeetExternalAPI) {
+    try {
+      // @ts-ignore
       const api = new window.JitsiMeetExternalAPI(domain, options);
       setJitsiApi(api);
 
       return () => {
         if (api) api.dispose();
       };
+    } catch (error) {
+      console.error("Jitsi initialization error:", error);
+      setLoadError("Failed to initialize classroom video.");
     }
-  }, [user, sessionId]);
+  }, [user, isScriptLoaded, sessionId]);
 
   if (isUserLoading || !user) return null;
 
@@ -97,7 +115,7 @@ export default function ClassroomPage() {
         </div>
       </div>
 
-      {/* Video Area - 80% of viewport height as requested */}
+      {/* Video Area */}
       <main className="w-full relative bg-black" style={{ height: '80vh' }}>
         <div 
           id="jitsi-container" 
@@ -105,19 +123,29 @@ export default function ClassroomPage() {
           className="w-full h-full" 
         />
         
-        {/* Loading fallback */}
-        <div className="absolute inset-0 flex items-center justify-center -z-10">
-          <p className="text-white text-2xl font-bold animate-pulse">
-            Starting video session...
-          </p>
-        </div>
+        {(!isScriptLoaded && !loadError) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-20 space-y-4">
+            <Loader2 className="size-16 animate-spin text-secondary" />
+            <p className="text-white text-2xl font-bold uppercase">Preparing Video...</p>
+          </div>
+        )}
+
+        {loadError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-20 p-8 text-center space-y-6">
+            <Info className="size-20 text-destructive" />
+            <h2 className="text-3xl font-black text-white uppercase">Connection Error</h2>
+            <p className="text-xl text-slate-300">{loadError}</p>
+            <Button size="lg" className="h-16 px-10 text-2xl font-bold" onClick={() => window.location.reload()}>
+              RETRY
+            </Button>
+          </div>
+        )}
       </main>
 
-      {/* Info Footer */}
       <footer className="flex-grow bg-slate-50 flex items-center justify-center p-6 border-t">
         <div className="text-center space-y-2">
-          <p className="text-2xl font-bold text-slate-700">
-            You are currently in the IBS Valenzuela Room
+          <p className="text-2xl font-bold text-slate-700 uppercase">
+            Currently in Session
           </p>
           <p className="text-lg text-muted-foreground">
             Please ensure your camera and microphone are allowed.
