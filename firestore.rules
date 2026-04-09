@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * StudyForge Security Rules
+     *
+     * Core Philosophy:
+     * This ruleset enforces a strict ownership model based on hierarchical pathing. 
+     * Security is anchored to the 'facilitatorId' present in the document paths, 
+     * ensuring that users can only access and manage data within their own tree.
+     *
+     * Data Structure:
+     * All application data is organized under a user-centric hierarchy:
+     * /users/{facilitatorId}/sessions/{sessionId}/...
+     *
+     * Key Security Decisions:
+     * 1. Authorization Independence: We use denormalized fields (like facilitatorId) 
+     *    within documents to allow rules to validate ownership and relational 
+     *    integrity without performing expensive get() lookups on parent documents.
+     * 2. Path-Based Ownership: The primary authorization mechanism is matching 
+     *    the 'facilitatorId' in the document path to the 'request.auth.uid'.
+     * 3. Prototyping Flexibility: While authorization (who can access) is strictly 
+     *    enforced, the internal schema of documents (data types, optional fields) 
+     *    is not validated to allow for rapid iteration during development.
+     *
+     * Denormalization for Authorization:
+     * - Sessions: Include 'facilitatorId' to match the path parameter.
+     * - LessonPrompts: Include 'facilitatorId' (from the parent session) and 
+     *   'generatedByUserId' to allow for multi-user context if needed, 
+     *   though currently restricted to the facilitator's path.
+     */
+
+    // --- Helper Functions ---
+
+    /** @description Checks if the request is from an authenticated user. */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** @description Checks if the authenticated user matches the provided ID. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** @description Checks if the user is the owner and the document exists. */
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Rules for Session documents, owned by a facilitator.
+     * @path /users/{facilitatorId}/sessions/{sessionId}
+     * @allow (get) If the user is the facilitator in the path.
+     * @allow (create) If the user is the facilitator and data.facilitatorId matches.
+     * @deny (update) If the user attempts to change the facilitatorId ownership.
+     * @principle Enforces path-based ownership and validates relational integrity.
+     */
+    match /users/{facilitatorId}/sessions/{sessionId} {
+      allow get, list: if isOwner(facilitatorId);
+      
+      allow create: if isOwner(facilitatorId) 
+        && request.resource.data.facilitatorId == facilitatorId;
+      
+      allow update: if isExistingOwner(facilitatorId) 
+        && request.resource.data.facilitatorId == resource.data.facilitatorId;
+      
+      allow delete: if isExistingOwner(facilitatorId);
+
+      /**
+       * @description Rules for AI-generated LessonPrompts within a session.
+       * @path /users/{facilitatorId}/sessions/{sessionId}/lessonPrompts/{lessonPromptId}
+       * @allow (list) If the user is the session facilitator.
+       * @allow (create) If the user is the facilitator and relational fields match.
+       * @deny (create) If the provided facilitatorId in data does not match the path.
+       * @principle Uses denormalized facilitatorId to ensure authorization independence.
+       */
+      match /lessonPrompts/{lessonPromptId} {
+        allow get, list: if isOwner(facilitatorId);
+
+        allow create: if isOwner(facilitatorId)
+          && request.resource.data.facilitatorId == facilitatorId
+          && request.resource.data.sessionId == sessionId;
+
+        allow update: if isExistingOwner(facilitatorId)
+          && request.resource.data.facilitatorId == resource.data.facilitatorId
+          && request.resource.data.sessionId == resource.data.sessionId;
+
+        allow delete: if isExistingOwner(facilitatorId);
+      }
+    }
+
+    // --- Global Deny-All ---
+    // Explicitly deny access to any path not defined above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

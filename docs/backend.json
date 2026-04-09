@@ -1,0 +1,156 @@
+{
+  "entities": {
+    "Session": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Session",
+      "type": "object",
+      "description": "Represents a scheduled teaching session or class, including its details and associated video conference room.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Session entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The title or name of the teaching session, e.g., 'Bible Study: The Book of John'."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of the session's content or topics to be covered."
+        },
+        "jitsiRoomName": {
+          "type": "string",
+          "description": "The unique room name used for the Jitsi video conference for this session."
+        },
+        "scheduledStartTime": {
+          "type": "string",
+          "description": "The planned date and time for the session to begin.",
+          "format": "date-time"
+        },
+        "durationMinutes": {
+          "type": "number",
+          "description": "The estimated duration of the session in minutes."
+        },
+        "facilitatorId": {
+          "type": "string",
+          "description": "Reference to the unique identifier of the user (from the external authentication system) who is facilitating this session. (Relationship: User 1:N Session)"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The timestamp when the session record was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "The timestamp when the session record was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "jitsiRoomName",
+        "scheduledStartTime",
+        "facilitatorId",
+        "createdAt"
+      ]
+    },
+    "LessonPrompt": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "LessonPrompt",
+      "type": "object",
+      "description": "Represents an AI-generated discussion prompt designed to aid instructors in leading engaging sessions.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the LessonPrompt entity."
+        },
+        "promptText": {
+          "type": "string",
+          "description": "The actual text of the discussion prompt."
+        },
+        "topic": {
+          "type": "string",
+          "description": "The topic or scripture reference for which this prompt was generated."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Reference to the unique identifier of the Session this prompt is associated with. (Relationship: Session 1:N LessonPrompt)"
+        },
+        "generatedByUserId": {
+          "type": "string",
+          "description": "Reference to the unique identifier of the user (from the external authentication system) who requested or generated this prompt. (Relationship: User 1:N LessonPrompt)"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The timestamp when the lesson prompt was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "promptText",
+        "topic",
+        "sessionId",
+        "generatedByUserId",
+        "createdAt"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{facilitatorId}/sessions/{sessionId}",
+        "definition": {
+          "entityName": "Session",
+          "schema": {
+            "$ref": "#/backend/entities/Session"
+          },
+          "description": "Represents a teaching session created and owned by a specific facilitator. Each document includes the 'facilitatorId' which must match the path parameter. This path ensures strong ownership for session management. Includes denormalized 'facilitatorId' for authorization independence (matching the path parameter).",
+          "params": [
+            {
+              "name": "facilitatorId",
+              "description": "The unique identifier of the user who facilitates and owns this session. Must match 'request.auth.uid'."
+            },
+            {
+              "name": "sessionId",
+              "description": "The unique identifier for the specific session."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{facilitatorId}/sessions/{sessionId}/lessonPrompts/{lessonPromptId}",
+        "definition": {
+          "entityName": "LessonPrompt",
+          "schema": {
+            "$ref": "#/backend/entities/LessonPrompt"
+          },
+          "description": "Represents an AI-generated discussion prompt associated with a specific teaching session. Each document includes 'generatedByUserId' (the creator) and a denormalized 'facilitatorId' (from the parent session) for authorization independence, allowing access to both the creator and the session's facilitator without hierarchical lookups.",
+          "params": [
+            {
+              "name": "facilitatorId",
+              "description": "The unique identifier of the user who facilitates the parent session. Used for path-based authorization to the session's content."
+            },
+            {
+              "name": "sessionId",
+              "description": "The unique identifier of the parent session to which this prompt belongs."
+            },
+            {
+              "name": "lessonPromptId",
+              "description": "The unique identifier for the specific lesson prompt."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The recommended Firestore data structure for StudyForge prioritizes Authorization Independence and Structural Segregation to ensure secure, scalable, and debuggable security rules. All collections adhere to the principle of homogeneous security posture, meaning all documents within a given collection share the same access requirements.Authorization for user-specific data is primarily handled through path-based ownership and denormalized fields.\n\n**Authorization Independence:**\n1.  **Sessions:** Sessions are structured under a user's unique ID (`/users/{facilitatorId}/sessions/{sessionId}`). This makes the `facilitatorId` explicitly part of the path, directly linking session ownership to the authenticated user's ID (`request.auth.uid`). This eliminates the need for `get()` calls to determine session ownership from a separate `users` collection or a top-level `sessions` collection, thereby enabling atomic operations and simplifying rules. The `Session` document will also contain a `facilitatorId` field, which must match the path's `{facilitatorId}` for rule validation.\n2.  **Lesson Prompts:** Lesson Prompts are nested under their respective sessions (`/users/{facilitatorId}/sessions/{sessionId}/lessonPrompts/{lessonPromptId}`). To ensure Authorization Independence, each `LessonPrompt` document will explicitly denormalize the `facilitatorId` from its parent `Session` document. This means a `LessonPrompt` document will contain both its `generatedByUserId` (the user who created the prompt) and the `facilitatorId` (the owner of the parent session). This denormalization allows security rules to evaluate access based solely on the `LessonPrompt` document's fields (`resource.data.generatedByUserId` or `resource.data.facilitatorId`) without needing to fetch the parent `Session` document using `get()`. This is crucial for maintaining atomic operations and simplifying rule logic.\n\n**QAPs (Queries as Authorization Primitives):**\n1.  **Listing Sessions:** The structure `/users/{facilitatorId}/sessions` enables efficient and secure listing of sessions. A user (`request.auth.uid`) can only list sessions where they are the `{facilitatorId}` in the path. This directly supports QAPs, as the query itself (`db.collection('users').doc(request.auth.uid).collection('sessions').get()`) implicitly filters for authorized data, and rules merely confirm the path matches the authenticated user.\n2.  **Listing Lesson Prompts:** Similarly, `/users/{facilitatorId}/sessions/{sessionId}/lessonPrompts` allows for secure listing. A user can list prompts within a session if `request.auth.uid` matches the `facilitatorId` in the path, or if `request.auth.uid` matches the `generatedByUserId` or `facilitatorId` denormalized within the `LessonPrompt` document. This allows a user to query all prompts within *their* session, or all prompts they generated within a specific session, without rules needing to perform extra data fetches for authorization.\n\nThis design leverages hierarchical paths for strong ownership, denormalization for authorization independence, and clear structural segregation to create a highly secure, performant, and maintainable Firestore database for StudyForge."
+  }
+}
