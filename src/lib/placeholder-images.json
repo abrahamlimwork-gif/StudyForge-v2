@@ -1,3 +1,16 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "hero-church",
+      "description": "A peaceful church setting for learning",
+      "imageUrl": "https://picsum.photos/seed/studyforge-hero/1200/600",
+      "imageHint": "church sanctuary"
+    },
+    {
+      "id": "dashboard-learning",
+      "description": "Resources for spiritual growth",
+      "imageUrl": "https://picsum.photos/seed/studyforge-dashboard/800/400",
+      "imageHint": "open book"
+    }
+  ]
 }
