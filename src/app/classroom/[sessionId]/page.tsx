@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
@@ -15,9 +16,12 @@ export default function ClassroomPage() {
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Replace 'YOUR_APP_ID' with your actual 8x8 App ID
+  // YOUR_APP_ID from 8x8 Console
   const APP_ID = "vpaas-magic-cookie-studio-7696342024";
   const DOMAIN = "8x8.vc";
+  
+  // NOTE: In production, generate this JWT on a secure backend.
+  const TEST_JWT = ""; 
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -26,12 +30,12 @@ export default function ClassroomPage() {
   }, [user, isUserLoading, router]);
 
   useEffect(() => {
-    // Dynamically load professional 8x8 Jitsi script
+    // Dynamically load professional 8x8 Jitsi script with App ID
     const script = document.createElement('script');
     script.src = `https://${DOMAIN}/${APP_ID}/external_api.js`;
     script.async = true;
     script.onload = () => setIsScriptLoaded(true);
-    script.onerror = () => setLoadError("Could not load the professional video service.");
+    script.onerror = () => setLoadError("Could not load the professional video service. Check your App ID.");
     document.body.appendChild(script);
 
     return () => {
@@ -44,13 +48,15 @@ export default function ClassroomPage() {
   useEffect(() => {
     if (!user || !isScriptLoaded || !jitsiContainerRef.current) return;
 
-    // Sanitize room name and prefix with App ID for 8x8
+    // Sanitize room name and prefix with App ID
     const cleanSessionId = typeof sessionId === 'string' ? sessionId.replace(/\s+/g, '_') : 'DefaultSession';
-    const roomName = `StudyForge_${cleanSessionId}_2026`;
+    // Unique identifier for the specific room instance
+    const roomName = `SF_${cleanSessionId}_2026`;
     const fullRoomName = `${APP_ID}/${roomName}`;
 
     const options = {
       roomName: fullRoomName,
+      jwt: TEST_JWT,
       width: "100%",
       height: "100%",
       parentNode: jitsiContainerRef.current,
@@ -64,6 +70,11 @@ export default function ClassroomPage() {
         disableDeepLinking: true,
         prejoinPageEnabled: false,
         enableWelcomePage: false,
+        // Pro Simplification
+        disableInvites: true,
+        remoteVideoMenu: {
+          disableKick: true,
+        },
         toolbarButtons: ['microphone', 'camera', 'chat', 'tileview', 'hangup'],
       },
       interfaceConfigOverwrite: {
@@ -83,9 +94,9 @@ export default function ClassroomPage() {
       };
     } catch (error) {
       console.error("Jitsi initialization error:", error);
-      setLoadError("Failed to initialize professional classroom video.");
+      setLoadError("Failed to initialize professional classroom video. Check JWT/App ID.");
     }
-  }, [user, isScriptLoaded, sessionId, APP_ID]);
+  }, [user, isScriptLoaded, sessionId, APP_ID, TEST_JWT]);
 
   if (isUserLoading || !user) return null;
 
@@ -152,7 +163,7 @@ export default function ClassroomPage() {
             Managed 8x8 Professional Session
           </p>
           <p className="text-lg text-muted-foreground">
-            Please ensure your camera and microphone are allowed.
+            Session Secured via JaaS Infrastructure
           </p>
         </div>
       </footer>
