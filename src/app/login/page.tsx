@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useState } from 'react';
-import { auth, googleProvider } from '@/lib/firebase';
-import { signInWithPopup, sendSignInLinkToEmail } from 'firebase/auth';
+import { useState, useEffect } from 'react';
+import { useAuth, useUser } from '@/firebase';
+import { signInWithPopup, GoogleAuthProvider, sendSignInLinkToEmail } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,10 +16,19 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const auth = useAuth();
+  const { user, isUserLoading } = useUser();
+
+  useEffect(() => {
+    if (!isUserLoading && user) {
+      router.push('/dashboard');
+    }
+  }, [user, isUserLoading, router]);
 
   const handleGoogleLogin = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
       router.push('/dashboard');
     } catch (error) {
       toast({
@@ -55,6 +64,8 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (isUserLoading) return null;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">

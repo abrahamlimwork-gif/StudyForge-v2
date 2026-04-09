@@ -3,23 +3,23 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/components/providers/auth-provider';
+import { useUser } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Users, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Users } from 'lucide-react';
 
 export default function ClassroomPage() {
   const { sessionId } = useParams();
-  const { user, loading } = useAuth();
+  const { user, isUserLoading } = useUser();
   const router = useRouter();
   const jitsiContainerRef = useRef<HTMLDivElement>(null);
   const [jitsiApi, setJitsiApi] = useState<any>(null);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!isUserLoading && !user) {
       router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [user, isUserLoading, router]);
 
   useEffect(() => {
     if (!user || !jitsiContainerRef.current) return;
@@ -52,15 +52,17 @@ export default function ClassroomPage() {
     };
 
     // @ts-ignore
-    const api = new window.JitsiMeetExternalAPI(domain, options);
-    setJitsiApi(api);
+    if (window.JitsiMeetExternalAPI) {
+      const api = new window.JitsiMeetExternalAPI(domain, options);
+      setJitsiApi(api);
 
-    return () => {
-      if (api) api.dispose();
-    };
+      return () => {
+        if (api) api.dispose();
+      };
+    }
   }, [user, sessionId]);
 
-  if (loading || !user) return null;
+  if (isUserLoading || !user) return null;
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">

@@ -2,66 +2,74 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/components/providers/auth-provider';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
+import { collection, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import { Plus, Video, Calendar, BookOpen } from 'lucide-react';
 import { LessonPrompts } from '@/components/lesson-prompts';
 
 interface Session {
   id: string;
-  roomName: string;
-  topic: string;
-  createdAt: Timestamp;
+  name: string;
+  jitsiRoomName: string;
+  description: string;
+  createdAt: any;
+  facilitatorId: string;
 }
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const { user, isUserLoading } = useUser();
+  const db = useFirestore();
+  const router = useRouter();
+  
   const [newRoomName, setNewRoomName] = useState('');
   const [newTopic, setNewTopic] = useState('');
-  const router = useRouter();
+
+  // Memoize the sessions query
+  const sessionsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    // Aligning with backend.json: /users/{facilitatorId}/sessions/{sessionId}
+    return query(
+      collection(db, 'users', user.uid, 'sessions'), 
+      orderBy('createdAt', 'desc')
+    );
+  }, [db, user]);
+
+  const { data: sessions, isLoading: isSessionsLoading } = useCollection<Session>(sessionsQuery);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!isUserLoading && !user) {
       router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [user, isUserLoading, router]);
 
-  useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, 'sessions'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Session[];
-      setSessions(docs);
-    });
-    return () => unsubscribe();
-  }, [user]);
-
-  const handleCreateSession = async (e: React.FormEvent) => {
+  const handleCreateSession = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRoomName || !newTopic) return;
-    try {
-      await addDoc(collection(db, 'sessions'), {
-        roomName: newRoomName.replace(/\s+/g, '-').toLowerCase(),
-        topic: newTopic,
-        createdAt: Timestamp.now(),
-        creatorId: user?.uid,
-      });
-      setNewRoomName('');
-      setNewTopic('');
-    } catch (error) {
-      console.error("Error adding document: ", error);
-    }
+    if (!newRoomName || !newTopic || !user || !db) return;
+
+    const sessionData = {
+      name: newTopic,
+      description: `Session about ${newTopic}`,
+      jitsiRoomName: newRoomName.replace(/\s+/g, '-').toLowerCase(),
+      scheduledStartTime: new Date().toISOString(),
+      facilitatorId: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    const sessionsRef = collection(db, 'users', user.uid, 'sessions');
+    addDocumentNonBlocking(sessionsRef, sessionData);
+
+    setNewRoomName('');
+    setNewTopic('');
   };
 
-  if (loading || !user) return null;
+  if (isUserLoading || !user) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,7 +131,9 @@ export default function DashboardPage() {
               Recent Sessions
             </h2>
             
-            {sessions.length === 0 ? (
+            {isSessionsLoading ? (
+              <div className="text-2xl text-muted-foreground">Loading your sessions...</div>
+            ) : !sessions || sessions.length === 0 ? (
               <Card className="border-dashed border-4 p-12 text-center">
                 <CardContent>
                   <BookOpen className="size-16 mx-auto text-muted mb-4" />
@@ -139,16 +149,16 @@ export default function DashboardPage() {
                         <Video className="size-12 text-primary" />
                       </div>
                       <div className="flex-grow text-center md:text-left space-y-2">
-                        <h3 className="text-3xl font-bold text-primary">{session.topic}</h3>
-                        <p className="text-xl text-muted-foreground">Room: {session.roomName}</p>
+                        <h3 className="text-3xl font-bold text-primary">{session.name}</h3>
+                        <p className="text-xl text-muted-foreground">Room: {session.jitsiRoomName}</p>
                         <p className="text-lg text-muted-foreground italic">
-                          Created {session.createdAt.toDate().toLocaleDateString()}
+                          {session.createdAt && `Created ${new Date(session.createdAt.seconds * 1000).toLocaleDateString()}`}
                         </p>
                       </div>
                       <Button 
                         size="lg" 
                         className="h-16 px-10 text-2xl font-bold bg-primary"
-                        onClick={() => router.push(`/classroom/${session.roomName}`)}
+                        onClick={() => router.push(`/classroom/${session.jitsiRoomName}`)}
                       >
                         Join Room
                       </Button>

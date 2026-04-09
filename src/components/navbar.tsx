@@ -2,14 +2,14 @@
 "use client";
 
 import Link from 'next/link';
-import { useAuth } from './providers/auth-provider';
-import { auth } from '@/lib/firebase';
+import { useAuth, useUser } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { Button } from './ui/button';
-import { LogOut, Home, Presentation } from 'lucide-react';
+import { LogOut, Home } from 'lucide-react';
 
 export function Navbar() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const auth = useAuth();
 
   const handleLogout = async () => {
     await signOut(auth);

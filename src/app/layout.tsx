@@ -1,7 +1,7 @@
 
 import type {Metadata} from 'next';
 import './globals.css';
-import { AuthProvider } from '@/components/providers/auth-provider';
+import { FirebaseClientProvider } from '@/firebase';
 import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
@@ -23,10 +23,10 @@ export default function RootLayout({
         <script src="https://meet.jit.si/external_api.js" async></script>
       </head>
       <body className="font-body antialiased min-h-screen">
-        <AuthProvider>
+        <FirebaseClientProvider>
           {children}
           <Toaster />
-        </AuthProvider>
+        </FirebaseClientProvider>
       </body>
     </html>
   );
