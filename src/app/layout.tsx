@@ -20,8 +20,8 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap" rel="stylesheet" />
-        {/* Standard Public Jitsi Meet External API - Pure Public Server */}
-        <script src="https://meet.jit.si/external_api.js" async></script>
+        {/* Using meet.ffmuc.net community server for better reliability and fewer limits */}
+        <script src="https://meet.ffmuc.net/external_api.js" async></script>
       </head>
       <body className="font-body antialiased min-h-screen">
         <FirebaseClientProvider>
