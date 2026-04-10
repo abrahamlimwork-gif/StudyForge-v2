@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -57,7 +56,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     } catch (error: any) {
       console.error('Explorer Sync Error:', error);
       if (error.status === 401) {
-        // Token is expired or invalid
         setHasToken(false);
         localStorage.removeItem('google_access_token');
         toast({
@@ -80,8 +78,10 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
     const checkRedirect = async () => {
       try {
+        console.log("Explorer: checking redirect result...");
         const result = await getRedirectResult(auth);
         if (result) {
+          console.log("Explorer: found redirect result!");
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
             localStorage.setItem('google_access_token', credential.accessToken);
@@ -90,7 +90,9 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           }
         }
       } catch (err: any) {
-        console.error("Explorer Redirect Result Error:", err);
+        console.error("--- DEBUG EXPLORER ERROR ---");
+        console.error("Code:", err.code);
+        console.error("Msg:", err.message);
       }
     };
 
@@ -119,7 +121,10 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         await signInWithRedirect(auth, provider);
       }
     } catch (err: any) {
-      console.error("Connection Error:", err);
+      console.error("--- DEBUG CONNECT ERROR ---");
+      console.error("Code:", err.code);
+      console.error("Msg:", err.message);
+      
       toast({
         variant: 'destructive',
         title: 'Connection Failed',

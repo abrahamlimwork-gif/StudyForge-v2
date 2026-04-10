@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -36,16 +35,25 @@ export default function LoginPage() {
 
     const handleRedirectResult = async () => {
       try {
+        console.log("Checking for Redirect Result...");
         const result = await getRedirectResult(auth);
         if (result) {
+          console.log("Redirect Result Found:", result.user.email);
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
             localStorage.setItem('google_access_token', credential.accessToken);
           }
           router.replace('/dashboard');
+        } else {
+          console.log("No redirect result found.");
         }
       } catch (err: any) {
-        console.error("Redirect Result Error:", err);
+        // DEBUG THE REAL ERROR
+        console.error("--- DEBUG REDIRECT ERROR ---");
+        console.error("Error Code:", err.code);
+        console.error("Error Message:", err.message);
+        console.error("Custom Data:", err.customData);
+        
         if (err.code === 'auth/unauthorized-domain') {
           setIsUnauthorizedDomain(true);
         } else {
@@ -81,6 +89,7 @@ export default function LoginPage() {
       await setPersistence(auth, browserLocalPersistence);
 
       if (method === 'popup') {
+        console.log("Attempting Popup Login...");
         const result = await signInWithPopup(auth, provider);
         const credential = GoogleAuthProvider.credentialFromResult(result);
         if (credential?.accessToken) {
@@ -88,14 +97,20 @@ export default function LoginPage() {
         }
         router.push('/dashboard');
       } else {
+        console.log("Attempting Redirect Login...");
         await signInWithRedirect(auth, provider);
       }
       
     } catch (err: any) {
-      console.error("Auth Error:", err);
+      // DEBUG THE REAL ERROR
+      console.error("--- DEBUG LOGIN ERROR ---");
+      console.error("Error Code:", err.code);
+      console.error("Error Message:", err.message);
+      console.error("Custom Data:", err.customData);
+
       if (err.code === 'auth/unauthorized-domain') {
         setIsUnauthorizedDomain(true);
-      } else if (err.code === 'auth/popup-closed-by-user') {
+      } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         setIsPopupClosed(true);
         setUseRedirect(true);
       } else {
