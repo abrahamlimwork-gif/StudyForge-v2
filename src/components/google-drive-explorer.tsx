@@ -12,12 +12,10 @@ import {
   RefreshCw, 
   Presentation, 
   ShieldCheck, 
-  ExternalLink, 
   AlertCircle, 
   Lock, 
   Plus, 
   UploadCloud,
-  CheckCircle2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
@@ -59,8 +57,13 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     } catch (error: any) {
       console.error('Explorer Sync Error:', error);
       if (error.status === 401) {
+        // Token is expired or invalid
         setHasToken(false);
         localStorage.removeItem('google_access_token');
+        toast({
+          title: "Session Expired",
+          description: "Please reconnect your Google Workspace.",
+        });
       } else {
         setApiError({
           status: error.status || 500,
