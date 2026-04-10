@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { fetchGoogleSlides } from '@/lib/google-api-utils';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
-import { FileText, Loader2, RefreshCw, Presentation, ShieldCheck, ExternalLink, AlertCircle, LogIn } from 'lucide-react';
+import { FileText, Loader2, RefreshCw, Presentation, ShieldCheck, ExternalLink, AlertCircle, LogIn, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
@@ -26,7 +26,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   const loadFiles = async (token?: string) => {
     const accessToken = token || localStorage.getItem('google_access_token');
     if (!accessToken) {
-      console.log("No access token found in localStorage.");
       setHasToken(false);
       return;
     }
@@ -36,35 +35,30 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     setIsApiDisabled(false);
     
     try {
-      console.log("Fetching Google Slides with token...");
       const googleFiles = await fetchGoogleSlides(accessToken);
       setFiles(googleFiles);
     } catch (error: any) {
-      console.error('Drive fetch error:', error);
+      console.error('Explorer Sync Error:', error);
       
-      const errorMessage = error.message || '';
+      const status = error.status;
+      const body = error.body || '';
       
-      if (errorMessage.includes('403') && (errorMessage.includes('SERVICE_DISABLED') || errorMessage.includes('API has not been used'))) {
+      // Check for project configuration errors (403 Service Disabled)
+      if (status === 403 && (body.includes('SERVICE_DISABLED') || body.includes('API has not been used'))) {
         setIsApiDisabled(true);
-        toast({
-          variant: 'destructive',
-          title: 'Google Drive API Required',
-          description: 'The Drive API is disabled in your Google Cloud Console.',
-        });
         return;
       }
 
-      if (errorMessage.includes('401') || errorMessage.includes('403')) {
-        console.warn("Unauthorized or Forbidden response. Clearing token.");
+      // Handle token expiration
+      if (status === 401 || status === 403) {
         setHasToken(false);
         localStorage.removeItem('google_access_token');
+        toast({
+          variant: 'destructive',
+          title: 'Session Expired',
+          description: 'Please reconnect your Google account.',
+        });
       }
-
-      toast({
-        variant: 'destructive',
-        title: 'Library Sync Failed',
-        description: 'Could not retrieve slides. Please reconnect your account.',
-      });
     } finally {
       setLoading(false);
     }
@@ -73,15 +67,11 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   const handleConnect = async () => {
     if (!auth) return;
     
-    // Clear state before connecting
     localStorage.removeItem('google_access_token');
     setLoading(true);
     
-    console.log("Reconnecting Google Drive...");
-    
     try {
       const provider = new GoogleAuthProvider();
-      // Use minimal scopes as requested for verification
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.addScope('https://www.googleapis.com/auth/presentations');
       
@@ -93,17 +83,13 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
       const credential = GoogleAuthProvider.credentialFromResult(result);
       
       if (credential?.accessToken) {
-        console.log("New Access Token acquired.");
         localStorage.setItem('google_access_token', credential.accessToken);
         setHasToken(true);
-        toast({ 
-          title: "Workspace Connected", 
-          description: `Logged in as ${result.user.displayName}. Syncing your Drive now.` 
-        });
+        toast({ title: "Workspace Linked", description: "Successfully authenticated with Google." });
         await loadFiles(credential.accessToken);
       }
     } catch (err: any) {
-      console.error("Popup Connect Error:", err);
+      console.error("Connection Error:", err);
       toast({
         variant: 'destructive',
         title: 'Connection Failed',
@@ -120,29 +106,29 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
   if (isApiDisabled) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-6">
-        <div className="p-6 bg-red-500/10 rounded-full border border-red-500/20">
-          <AlertCircle className="size-12 text-red-400" />
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-6 bg-slate-900">
+        <div className="p-6 bg-amber-500/10 rounded-full border border-amber-500/20">
+          <AlertCircle className="size-12 text-amber-400" />
         </div>
         <div className="space-y-4">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-red-400">API Access Required</p>
-          <p className="text-sm text-white/40 italic leading-relaxed">
-            The Google Drive API is not enabled for this project. Please enable it in your Google Cloud Console.
+          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">Drive API Disabled</h3>
+          <p className="text-xs text-white/40 italic leading-relaxed">
+            The Google Drive API must be enabled in your Google Cloud Console for project <span className="text-amber-400">210492515699</span>.
           </p>
           <Button 
             variant="outline" 
-            onClick={() => window.open('https://console.developers.google.com/apis/api/drive.googleapis.com/overview', '_blank')}
-            className="w-full h-12 border-white/10 hover:bg-white/5 text-white/80 font-bold text-xs uppercase tracking-widest rounded-xl"
+            onClick={() => window.open('https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=210492515699', '_blank')}
+            className="w-full h-12 border-white/10 hover:bg-white/5 text-white/80 font-bold text-[10px] uppercase tracking-widest rounded-xl"
           >
             <ExternalLink className="mr-2 h-4 w-4" />
-            Enable Drive API
+            Enable API Now
           </Button>
           <Button 
             variant="ghost" 
-            onClick={() => handleConnect()}
-            className="w-full h-12 text-[10px] uppercase font-black tracking-widest text-blue-400 hover:text-blue-300"
+            onClick={() => loadFiles()}
+            className="w-full h-10 text-[9px] uppercase font-black tracking-widest text-blue-400 hover:text-blue-300"
           >
-            <RefreshCw className="mr-2 h-3 w-3" /> Reconnect Now
+            <RefreshCw className="mr-2 h-3 w-3" /> Check Status Again
           </Button>
         </div>
       </div>
@@ -151,22 +137,21 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
   if (!hasToken) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-10 text-center space-y-6">
-        <div className="p-6 bg-blue-500/10 rounded-full border border-blue-500/20">
-          <Presentation className="size-12 text-blue-400" />
+      <div className="flex flex-col items-center justify-center h-full p-10 text-center space-y-8 bg-slate-900">
+        <div className="p-8 bg-blue-600/10 rounded-[2rem] border border-blue-600/20">
+          <Lock className="size-16 text-blue-500" />
         </div>
-        <div className="space-y-2">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-white/40">Library Locked</p>
-          <p className="text-sm text-white/20 italic">Connect your Google Drive to access your slides and sermon notes.</p>
+        <div className="space-y-4">
+          <h3 className="text-xl font-black uppercase tracking-tighter text-white">Library Locked</h3>
+          <p className="text-sm text-white/30 italic">Connect your Workspace to access your sermon slides and media.</p>
         </div>
         <Button 
-          variant="outline" 
           onClick={handleConnect}
           disabled={loading}
-          className="w-full h-14 border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 font-black text-xs tracking-widest uppercase rounded-2xl transition-all"
+          className="w-full h-16 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs tracking-widest uppercase rounded-2xl shadow-xl shadow-blue-600/10 transition-all active:scale-95"
         >
-          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
-          Reconnect Google
+          {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
+          Connect Google Drive
         </Button>
       </div>
     );
@@ -174,18 +159,18 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
   if (loading && files.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-white/20">
-        <Loader2 className="size-8 animate-spin mb-2" />
-        <p className="text-[10px] font-black uppercase tracking-widest">Syncing Workspace...</p>
+      <div className="flex flex-col items-center justify-center h-full bg-slate-900 text-white/20">
+        <Loader2 className="size-10 animate-spin mb-4" />
+        <p className="text-[10px] font-black uppercase tracking-widest italic">Synchronizing Workspace...</p>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full bg-slate-900">
-      <div className="p-6 flex items-center justify-between border-b border-white/5 bg-slate-900/50">
+      <div className="p-6 flex items-center justify-between border-b border-white/5 bg-slate-950/30">
         <h2 className="text-[10px] font-black uppercase tracking-widest text-white/40 flex items-center gap-3">
-          <Presentation className="h-4 w-4 text-blue-400" /> My Library
+          <Presentation className="h-4 w-4 text-blue-400" /> Slide Library
         </h2>
         <Button 
           size="icon" 
@@ -200,33 +185,26 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
       <ScrollArea className="flex-grow">
         <div className="p-4 space-y-3">
           {files.length === 0 ? (
-            <div className="text-center p-12 border-2 border-dashed border-white/5 rounded-3xl opacity-30">
+            <div className="text-center p-12 border-2 border-dashed border-white/5 rounded-3xl opacity-20">
               <p className="text-[10px] font-black uppercase tracking-widest">No Slides Found</p>
-              <p className="text-[9px] mt-1">Files will appear here once you create them.</p>
-              <Button 
-                variant="ghost" 
-                onClick={handleConnect}
-                className="mt-4 text-[9px] uppercase font-black tracking-[0.2em] text-blue-400"
-              >
-                Refresh Connection
-              </Button>
+              <p className="text-[9px] mt-1 italic">Create a sermon via AI or upload to Drive.</p>
             </div>
           ) : (
             files.map((file) => (
               <button
                 key={file.id}
                 onClick={() => onFileSelect(file.id)}
-                className="w-full text-left group p-4 bg-white/5 hover:bg-blue-500/10 border border-white/5 hover:border-blue-500/20 rounded-2xl transition-all flex items-center gap-4"
+                className="w-full text-left group p-4 bg-white/5 hover:bg-blue-600/10 border border-white/5 hover:border-blue-600/20 rounded-2xl transition-all flex items-center gap-4"
               >
-                <div className="h-12 w-12 bg-slate-800 rounded-xl flex items-center justify-center text-blue-400 shrink-0">
+                <div className="h-12 w-12 bg-slate-800 rounded-xl flex items-center justify-center text-blue-500 shrink-0 shadow-inner">
                   <FileText className="h-6 w-6" />
                 </div>
                 <div className="flex-grow min-w-0">
                   <p className="text-sm font-bold truncate text-white/90 group-hover:text-blue-400 transition-colors">
                     {file.name}
                   </p>
-                  <p className="text-[10px] font-mono text-white/30 uppercase mt-1">
-                    Rev: {new Date(file.modifiedTime).toLocaleDateString()}
+                  <p className="text-[10px] font-mono text-white/20 uppercase mt-1">
+                    MOD: {new Date(file.modifiedTime).toLocaleDateString()}
                   </p>
                 </div>
               </button>
@@ -235,18 +213,18 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         </div>
       </ScrollArea>
       
-      <div className="p-4 border-t border-white/5">
+      <div className="p-4 border-t border-white/5 bg-slate-950/20">
         <Button 
           variant="ghost" 
           onClick={() => {
-            console.log("Disconnecting account...");
             localStorage.removeItem('google_access_token');
             setHasToken(false);
             setFiles([]);
+            toast({ title: "Account Unlinked", description: "Google session has been cleared." });
           }}
-          className="w-full h-10 text-[10px] font-black uppercase tracking-widest text-white/20 hover:text-red-400 hover:bg-red-400/5"
+          className="w-full h-10 text-[9px] font-black uppercase tracking-widest text-white/10 hover:text-red-400 hover:bg-red-400/5 transition-colors"
         >
-          Disconnect Account
+          Disconnect Workspace
         </Button>
       </div>
     </div>

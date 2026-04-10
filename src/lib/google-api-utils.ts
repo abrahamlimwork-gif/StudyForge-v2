@@ -24,7 +24,12 @@ export async function fetchGoogleSlides(accessToken: string) {
     console.error("Drive API Error Status:", response.status);
     console.error("Drive API Error Text:", response.statusText);
     console.error("Drive API Error Body:", errorBody);
-    throw new Error(`Failed to fetch Google Slides: ${response.status} ${response.statusText} - ${errorBody}`);
+    
+    // We throw a structured error so the UI can catch and handle it specifically
+    const error: any = new Error(`Drive API Error: ${response.status}`);
+    error.status = response.status;
+    error.body = errorBody;
+    throw error;
   }
 
   const data = await response.json();
