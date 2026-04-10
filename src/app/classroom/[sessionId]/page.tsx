@@ -16,13 +16,15 @@ import {
   Sparkles,
   Loader2,
   AlertTriangle,
-  Maximize2
+  Maximize2,
+  Info
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleDriveExplorer } from '@/components/google-drive-explorer';
 import { generateSermonSlides } from '@/ai/flows/generate-sermon-slides';
 import { createGoogleSlides, addSlidesContent } from '@/lib/google-api-utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function PresenterDashboard() {
   const { sessionId } = useParams();
@@ -55,8 +57,9 @@ export default function PresenterDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // Use /embed which is more reliable for iframe usage
   const slidesUrl = selectedFileId 
-    ? `https://docs.google.com/presentation/d/${selectedFileId}/presenter` 
+    ? `https://docs.google.com/presentation/d/${selectedFileId}/embed?start=false&loop=false&delayms=3000` 
     : null;
 
   const roomName = typeof sessionId === 'string' ? sessionId : 'TestSession';
@@ -176,33 +179,29 @@ export default function PresenterDashboard() {
             <>
               <div className="absolute top-6 right-6 z-[60] flex gap-3">
                 <Button 
-                  onClick={() => window.open(`https://docs.google.com/presentation/d/${selectedFileId}/presenter`, '_blank')}
+                  onClick={() => window.open(`https://docs.google.com/presentation/d/${selectedFileId}/present`, '_blank')}
                   variant="secondary"
                   className="bg-blue-600/90 hover:bg-blue-600 text-white font-black border-none h-12 px-6 rounded-xl shadow-2xl"
                 >
                   <Maximize2 className="mr-2 h-4 w-4" /> FULLSCREEN
                 </Button>
-                <Button 
-                  onClick={() => window.open(`https://docs.google.com/presentation/d/${selectedFileId}/edit`, '_blank')}
-                  variant="secondary"
-                  className="bg-slate-800/90 hover:bg-slate-800 text-white border-white/10 h-12 px-6 rounded-xl"
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" /> OPEN IN DRIVE
-                </Button>
               </div>
+              
               <iframe 
                 src={slidesUrl}
                 className="w-full h-full border-none"
                 allowFullScreen
                 allow="clipboard-write; encrypted-media; fullscreen; picture-in-picture"
               />
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-black/60 backdrop-blur-md border border-white/10 px-6 py-3 rounded-full flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="size-4 text-amber-400" />
-                  <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">
-                    Seeing an error? Use the 'Fullscreen' button above.
-                  </p>
-                </div>
+
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[60] w-full max-w-lg">
+                <Alert className="bg-black/80 backdrop-blur-md border-blue-500/20 text-white">
+                  <Info className="h-4 w-4 text-blue-400" />
+                  <AlertTitle className="text-[10px] font-black uppercase tracking-widest text-blue-400">Loading Tips</AlertTitle>
+                  <AlertDescription className="text-[9px] font-bold text-white/60">
+                    If you see "Unable to open file", ensure you are logged into Google in this browser and allow third-party cookies for Google Drive.
+                  </AlertDescription>
+                </Alert>
               </div>
             </>
           ) : (
