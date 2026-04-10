@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -20,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import { cn } from '@/lib/utils';
 
 interface GoogleFile {
@@ -71,7 +72,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     }
   };
 
-  const handleConnect = async () => {
+  const handleConnect = async (method: 'popup' | 'redirect' = 'popup') => {
     if (!auth) return;
     
     localStorage.removeItem('google_access_token');
@@ -79,31 +80,37 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     
     try {
       const provider = new GoogleAuthProvider();
+      // Using only drive.file for unrestricted access
       provider.addScope('https://www.googleapis.com/auth/drive.file');
-      provider.addScope('https://www.googleapis.com/auth/presentations');
       
       provider.setCustomParameters({
         prompt: 'select_account'
       });
       
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      
-      if (credential?.accessToken) {
-        localStorage.setItem('google_access_token', credential.accessToken);
-        setHasToken(true);
-        toast({ 
-          title: "Workspace Linked", 
-          description: "Note: Use 'Advanced > Go to StudyForge' if prompted." 
-        });
-        await loadFiles(credential.accessToken);
+      if (method === 'popup') {
+        const result = await signInWithPopup(auth, provider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        
+        if (credential?.accessToken) {
+          localStorage.setItem('google_access_token', credential.accessToken);
+          setHasToken(true);
+          toast({ 
+            title: "Workspace Linked", 
+            description: "Syncing library..." 
+          });
+          await loadFiles(credential.accessToken);
+        }
+      } else {
+        await signInWithRedirect(auth, provider);
       }
     } catch (err: any) {
       console.error("Connection Error:", err);
       toast({
         variant: 'destructive',
         title: 'Connection Failed',
-        description: err.message || 'Could not connect to Google.',
+        description: err.code === 'auth/popup-closed-by-user' 
+          ? 'Popup blocked. Please try Redirect method.'
+          : err.message || 'Could not connect to Google.',
       });
     } finally {
       setLoading(false);
@@ -218,14 +225,24 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           <h3 className="text-xl font-black uppercase tracking-tighter text-white">Library Locked</h3>
           <p className="text-sm text-white/30 italic">Connect your Workspace to access your sermon slides.</p>
         </div>
-        <Button 
-          onClick={handleConnect}
-          disabled={loading}
-          className="w-full h-16 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs tracking-widest uppercase rounded-2xl shadow-xl shadow-blue-600/10 transition-all active:scale-95"
-        >
-          {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
-          Connect Google Drive
-        </Button>
+        <div className="w-full space-y-3">
+          <Button 
+            onClick={() => handleConnect('popup')}
+            disabled={loading}
+            className="w-full h-16 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs tracking-widest uppercase rounded-2xl shadow-xl shadow-blue-600/10 transition-all active:scale-95"
+          >
+            {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2 h-5 w-5" />}
+            Connect with Popup
+          </Button>
+          <Button 
+            variant="ghost"
+            onClick={() => handleConnect('redirect')}
+            disabled={loading}
+            className="w-full h-10 text-[9px] font-black uppercase tracking-widest text-white/30 hover:text-white"
+          >
+            Use Redirect (Fallback)
+          </Button>
+        </div>
       </div>
     );
   }
