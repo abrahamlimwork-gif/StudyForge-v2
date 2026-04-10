@@ -15,8 +15,7 @@ import {
   Clock,
   Sparkles,
   Loader2,
-  LogIn,
-  User as UserIcon
+  ShieldCheck
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleDriveExplorer } from '@/components/google-drive-explorer';
@@ -28,8 +27,7 @@ export default function PresenterDashboard() {
   const { sessionId } = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const { user, isUserLoading } = useUser();
-  const auth = useAuth();
+  const { user } = useUser();
 
   const [hasCopied, setHasCopied] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -45,10 +43,16 @@ export default function PresenterDashboard() {
     return () => clearInterval(timer);
   }, []);
 
+  // Check connection status based on token presence
   useEffect(() => {
-    const token = localStorage.getItem('google_access_token');
-    setIsGoogleConnected(!!user && !!token);
-  }, [user]);
+    const checkStatus = () => {
+      const token = localStorage.getItem('google_access_token');
+      setIsGoogleConnected(!!token);
+    };
+    checkStatus();
+    const interval = setInterval(checkStatus, 2000); // Poll for connection changes
+    return () => clearInterval(interval);
+  }, []);
 
   const slidesUrl = selectedFileId 
     ? `https://docs.google.com/presentation/d/${selectedFileId}/presenter` 
@@ -67,7 +71,7 @@ export default function PresenterDashboard() {
   const handleAISermonGen = async () => {
     const token = localStorage.getItem('google_access_token');
     if (!token) {
-      toast({ variant: 'destructive', title: 'Auth Error', description: 'Please log in again to sync with Drive.' });
+      toast({ variant: 'destructive', title: 'Connection Required', description: 'Please connect Google Drive in the sidebar first.' });
       return;
     }
 
@@ -76,16 +80,12 @@ export default function PresenterDashboard() {
       const data = await generateSermonSlides({ topic: "The Power of Grace" });
       const presentation = await createGoogleSlides(token, data.title);
       setSelectedFileId(presentation.presentationId);
-      toast({ title: "Sermon Created!", description: "Your AI presentation is ready in Google Drive." });
+      toast({ title: "Sermon Created!", description: "AI presentation saved to your Google Drive." });
     } catch (err) {
       toast({ variant: 'destructive', title: 'AI Error', description: 'Failed to generate sermon slides.' });
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const handleLogin = () => {
-    router.push('/login');
   };
 
   return (
@@ -104,24 +104,7 @@ export default function PresenterDashboard() {
         </div>
 
         <div className="flex items-center gap-6">
-          <div className="hidden lg:flex items-center gap-4 bg-white/5 px-6 py-3 rounded-2xl border border-white/5">
-            <Avatar className="size-10 border-2 border-blue-500/50">
-              <AvatarImage src={user?.photoURL || undefined} />
-              <AvatarFallback className="bg-blue-600 text-white font-black">
-                {user?.displayName?.[0] || 'G'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col">
-              <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Host</span>
-              <span className="text-sm font-bold text-white truncate max-w-[150px]">
-                {user?.displayName || "Guest Presenter"}
-              </span>
-            </div>
-          </div>
-
-          <div className="h-8 w-px bg-white/10" />
-
-          {isGoogleConnected ? (
+          {isGoogleConnected && (
             <Button 
               onClick={handleAISermonGen} 
               disabled={isGenerating}
@@ -130,15 +113,6 @@ export default function PresenterDashboard() {
             >
               {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               AI SERMON GEN
-            </Button>
-          ) : (
-            <Button 
-              onClick={handleLogin}
-              variant="default"
-              className="bg-primary text-primary-foreground h-12 px-6 font-black text-xs tracking-widest rounded-xl"
-            >
-              <LogIn className="mr-2 h-4 w-4" />
-              CONNECT GOOGLE
             </Button>
           )}
 
@@ -153,6 +127,17 @@ export default function PresenterDashboard() {
           >
             <ExternalLink className="mr-2 h-4 w-4" /> LAUNCH CALL
           </Button>
+
+          {user && (
+            <div className="flex items-center gap-4 bg-white/5 px-4 py-2 rounded-2xl border border-white/5">
+              <Avatar className="size-8">
+                <AvatarImage src={user.photoURL || undefined} />
+                <AvatarFallback className="bg-blue-600 text-white text-[10px] font-black">
+                  {user.displayName?.[0] || 'U'}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+          )}
         </div>
       </header>
 
@@ -170,23 +155,20 @@ export default function PresenterDashboard() {
               allowFullScreen
             />
           ) : (
-            <div className="flex-grow flex flex-col items-center justify-center text-center p-12 space-y-6">
+            <div className="flex-grow flex flex-col items-center justify-center text-center p-12 space-y-8">
               <div className="p-10 bg-slate-900 rounded-[3rem] border border-white/5">
                 <Monitor className="size-24 text-white/5" />
               </div>
-              <h3 className="text-3xl font-black text-white/20 uppercase tracking-widest">
-                {isGoogleConnected ? "Waiting for Selection" : "Connection Required"}
-              </h3>
-              <p className="text-lg text-white/10 max-w-sm italic">
-                {isGoogleConnected 
-                  ? "Select a presentation from your Drive to begin the HUD broadcast."
-                  : "Sign in to synchronize your Google Slides and unlock AI-powered features."}
-              </p>
-              {!isGoogleConnected && (
-                <Button onClick={handleLogin} variant="outline" className="h-14 px-10 border-white/10 text-white/50 hover:text-white rounded-2xl">
-                  Log in to Workspace
-                </Button>
-              )}
+              <div className="space-y-4">
+                <h3 className="text-3xl font-black text-white/20 uppercase tracking-[0.2em]">
+                  Waiting for Slide
+                </h3>
+                <p className="text-lg text-white/10 max-w-sm italic font-medium">
+                  {isGoogleConnected 
+                    ? "Select a presentation from the library to begin your broadcast."
+                    : "Connect your Google Drive in the sidebar to start presenting."}
+                </p>
+              </div>
             </div>
           )}
         </section>
@@ -221,7 +203,7 @@ export default function PresenterDashboard() {
           </span>
         </div>
         <div className="text-[11px] font-black text-white/10 uppercase italic tracking-widest">
-          StudyForge v3.0 Google-HUD
+          StudyForge v3.5 Workspace-HUD
         </div>
       </footer>
     </div>
