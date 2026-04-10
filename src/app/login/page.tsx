@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -13,11 +14,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { InfoIcon, Loader2, ShieldCheck, Mail, ArrowRight } from 'lucide-react';
+import { InfoIcon, Loader2, ShieldCheck, Mail, Globe } from 'lucide-react';
 
 export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
   const auth = useAuth();
@@ -34,12 +36,13 @@ export default function LoginPage() {
     
     localStorage.removeItem('google_access_token');
     setError(null);
+    setIsUnauthorizedDomain(false);
     setIsLoggingIn(true);
     
     try {
       const provider = new GoogleAuthProvider();
       
-      // Strict scopes for drive.file (non-restricted)
+      // Scopes for drive.file and presentations
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.addScope('https://www.googleapis.com/auth/presentations');
       
@@ -61,8 +64,15 @@ export default function LoginPage() {
       
       router.push('/dashboard');
     } catch (err: any) {
-      console.error("Google Auth Error Detail:", err);
-      setError(err.message);
+      console.error("Auth Error:", err);
+      
+      if (err.code === 'auth/unauthorized-domain') {
+        setIsUnauthorizedDomain(true);
+        setError("Domain Not Authorized");
+      } else {
+        setError(err.message || "An unknown authentication error occurred.");
+      }
+
       toast({
         variant: 'destructive',
         title: 'Authentication Failed',
@@ -75,9 +85,9 @@ export default function LoginPage() {
 
   if (isUserLoading || user) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-6">
-        <Loader2 className="size-20 animate-spin text-primary" />
-        <h1 className="text-5xl font-black text-primary uppercase tracking-tighter">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center space-y-6">
+        <Loader2 className="size-20 animate-spin text-blue-500" />
+        <h1 className="text-5xl font-black text-white uppercase tracking-tighter">
           Synchronizing...
         </h1>
       </div>
@@ -123,17 +133,28 @@ export default function LoginPage() {
               )}
             </Button>
 
-            <Alert className="bg-blue-600/10 border-blue-600/20 text-blue-400 p-6 rounded-2xl">
-              <InfoIcon className="size-6" />
-              <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Bypass Verification</AlertTitle>
-              <AlertDescription className="text-xs leading-relaxed italic">
-                Because this app is in development, Google will show a "Google hasn't verified this app" screen. 
-                Click <span className="font-bold text-white underline mx-1">Advanced</span> then 
-                <span className="font-bold text-white underline mx-1">Go to StudyForge (unsafe)</span> to proceed.
-              </AlertDescription>
-            </Alert>
+            {isUnauthorizedDomain ? (
+              <Alert className="bg-red-600/10 border-red-600/40 text-red-400 p-6 rounded-2xl">
+                <Globe className="size-6" />
+                <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Domain Authorization Required</AlertTitle>
+                <AlertDescription className="text-xs leading-relaxed italic">
+                  To log in from this preview URL, you must add <span className="font-bold text-white underline">{window.location.hostname}</span> to your 
+                  <span className="font-bold text-white"> Firebase Console > Authentication > Settings > Authorized Domains</span> list.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert className="bg-blue-600/10 border-blue-600/20 text-blue-400 p-6 rounded-2xl">
+                <InfoIcon className="size-6" />
+                <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Bypass Verification</AlertTitle>
+                <AlertDescription className="text-xs leading-relaxed italic">
+                  Google will show a "Google hasn't verified this app" screen. 
+                  Click <span className="font-bold text-white underline mx-1">Advanced</span> then 
+                  <span className="font-bold text-white underline mx-1">Go to StudyForge (unsafe)</span> to proceed.
+                </AlertDescription>
+              </Alert>
+            )}
 
-            {error && (
+            {error && !isUnauthorizedDomain && (
               <Alert variant="destructive" className="border-red-500/50 bg-red-500/10 text-red-400">
                 <InfoIcon className="size-6" />
                 <AlertTitle className="text-xl font-black uppercase">Auth Error</AlertTitle>
@@ -148,9 +169,6 @@ export default function LoginPage() {
                 <Mail className="size-5" />
                 <span className="text-sm font-bold uppercase tracking-widest">Workspace HUD v3.5</span>
               </div>
-              <p className="max-w-md text-[10px] leading-relaxed">
-                Uses 'drive.file' scope for secure AI slide generation in Project 210492515699.
-              </p>
             </div>
           </div>
         </CardContent>
