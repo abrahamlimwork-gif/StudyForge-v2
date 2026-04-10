@@ -20,10 +20,6 @@ import {
   FileText,
   Radio,
   Gamepad2,
-  PanelLeftClose,
-  PanelLeft,
-  PanelRightClose,
-  PanelRight,
   Layout
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -98,8 +94,6 @@ export default function PresenterDashboard() {
   }, [selectedFileId, isGoogleConnected]);
 
   // Sync the iframe URL with the current slide index
-  // Removed delayms=3000 to fix the navigation delay
-  // Added rm=minimal to hide Google UI and force HUD control for sync
   const slidesUrl = useMemo(() => {
     if (!selectedFileId) return null;
     return `https://docs.google.com/presentation/d/${selectedFileId}/embed?rm=minimal&slide=id.p${currentSlideIndex + 1}`;
@@ -179,27 +173,6 @@ export default function PresenterDashboard() {
           </Button>
           <div className="h-8 w-px bg-white/10" />
           
-          <div className="flex items-center gap-2">
-             <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={() => setIsLibraryVisible(!isLibraryVisible)}
-              className={cn("h-12 w-12 border-white/10 rounded-xl transition-all", isLibraryVisible ? "bg-blue-600 border-blue-500 text-white" : "bg-transparent text-white/40")}
-              title="Toggle Library"
-            >
-              {isLibraryVisible ? <PanelLeftClose className="size-5" /> : <PanelLeft className="size-5" />}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={() => setIsNotesVisible(!isNotesVisible)}
-              className={cn("h-12 w-12 border-white/10 rounded-xl transition-all", isNotesVisible ? "bg-blue-600 border-blue-500 text-white" : "bg-transparent text-white/40")}
-              title="Toggle Teleprompter"
-            >
-              {isNotesVisible ? <PanelRightClose className="size-5" /> : <PanelRight className="size-5" />}
-            </Button>
-          </div>
-
           <h1 className="text-lg font-black tracking-tighter uppercase flex items-center gap-3 ml-4">
             <Layout className="h-5 w-5 text-blue-400" />
             <span className="hidden lg:inline">Workspace HUD</span>
@@ -244,7 +217,7 @@ export default function PresenterDashboard() {
         </div>
       </header>
 
-      <main className="flex-grow flex overflow-hidden">
+      <main className="flex-grow flex overflow-hidden relative">
         
         <aside className={cn(
           "bg-slate-900 flex flex-col border-r border-white/5 transition-all duration-300 ease-in-out",
@@ -254,6 +227,31 @@ export default function PresenterDashboard() {
         </aside>
 
         <section className="flex-grow bg-black flex flex-col relative overflow-hidden transition-all duration-300">
+          
+          {/* Library Grabber Button */}
+          <button
+            onClick={() => setIsLibraryVisible(!isLibraryVisible)}
+            className={cn(
+              "absolute left-0 top-1/2 -translate-y-1/2 z-[70] h-20 w-6 flex items-center justify-center bg-slate-900/80 backdrop-blur-md border border-l-0 border-white/10 rounded-r-xl transition-all hover:bg-blue-600 text-white/40 hover:text-white shadow-2xl",
+              !isLibraryVisible && "hover:w-8"
+            )}
+            title={isLibraryVisible ? "Hide Library" : "Show Library"}
+          >
+            {isLibraryVisible ? <ChevronLeft className="size-4" /> : <ChevronRight className="size-4" />}
+          </button>
+
+          {/* Notes Grabber Button */}
+          <button
+            onClick={() => setIsNotesVisible(!isNotesVisible)}
+            className={cn(
+              "absolute right-0 top-1/2 -translate-y-1/2 z-[70] h-20 w-6 flex items-center justify-center bg-slate-900/80 backdrop-blur-md border border-r-0 border-white/10 rounded-l-xl transition-all hover:bg-blue-600 text-white/40 hover:text-white shadow-2xl",
+              !isNotesVisible && "hover:w-8"
+            )}
+            title={isNotesVisible ? "Hide Teleprompter" : "Show Teleprompter"}
+          >
+            {isNotesVisible ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
+          </button>
+
           {slidesUrl ? (
             <>
               <div className="absolute top-6 right-6 z-[60] flex gap-3">
