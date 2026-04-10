@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
-import { GoogleAuthProvider, signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { cn } from '@/lib/utils';
 
 interface GoogleFile {
@@ -72,6 +72,31 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     }
   };
 
+  // Handle Redirect Result on Mount
+  useEffect(() => {
+    if (!auth) return;
+
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            localStorage.setItem('google_access_token', credential.accessToken);
+            setHasToken(true);
+            await loadFiles(credential.accessToken);
+            toast({ title: "Sync Active", description: "Google Workspace linked via redirect." });
+          }
+        }
+      } catch (err: any) {
+        console.error("Explorer Redirect Error:", err);
+      }
+    };
+
+    checkRedirect();
+    loadFiles();
+  }, [auth]);
+
   const handleConnect = async (method: 'popup' | 'redirect' = 'popup') => {
     if (!auth) return;
     
@@ -80,7 +105,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     
     try {
       const provider = new GoogleAuthProvider();
-      // Using only drive.file for unrestricted access
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       
       provider.setCustomParameters({
@@ -177,10 +201,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     toast({ title: "Importing...", description: "Attempting to load Slide ID directly." });
   };
 
-  useEffect(() => {
-    loadFiles();
-  }, []);
-
   if (apiError) {
     return (
       <div className="flex flex-col h-full bg-slate-900 p-6 overflow-hidden">
@@ -201,7 +221,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
           <div className="w-full space-y-3 pt-4">
             <Button 
-              onClick={() => window.open('https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=210492515699', '_blank')}
+              onClick={() => window.open('https://console.developers.google.com/apis/api/drive.googleapis.com/overview', '_blank')}
               className="w-full h-12 border border-white/10 hover:bg-white/5 text-white/80 font-bold text-[10px] uppercase tracking-widest rounded-xl"
             >
               <ExternalLink className="mr-2 h-4 w-4" /> Enable Drive API

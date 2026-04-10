@@ -8,7 +8,8 @@ import {
   setPersistence, 
   browserLocalPersistence,
   signInWithPopup,
-  signInWithRedirect
+  signInWithRedirect,
+  getRedirectResult
 } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import { InfoIcon, Loader2, ShieldCheck, Mail, Globe, AlertTriangle, ArrowRight 
 
 export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isProcessingRedirect, setIsProcessingRedirect] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
   const [isPopupClosed, setIsPopupClosed] = useState(false);
@@ -29,11 +31,44 @@ export default function LoginPage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
 
+  // Handle Redirect Result on Mount
   useEffect(() => {
-    if (!isUserLoading && user) {
+    if (!auth) return;
+
+    const handleRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            localStorage.setItem('google_access_token', credential.accessToken);
+            toast({ 
+              title: "Workspace Authorized", 
+              description: "Redirect sync successful." 
+            });
+          }
+          router.replace('/dashboard');
+        }
+      } catch (err: any) {
+        console.error("Redirect Result Error:", err);
+        if (err.code === 'auth/unauthorized-domain') {
+          setIsUnauthorizedDomain(true);
+        } else {
+          setError(err.message);
+        }
+      } finally {
+        setIsProcessingRedirect(false);
+      }
+    };
+
+    handleRedirect();
+  }, [auth, router, toast]);
+
+  useEffect(() => {
+    if (!isUserLoading && user && !isProcessingRedirect) {
       router.replace('/dashboard');
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isUserLoading, router, isProcessingRedirect]);
 
   const handleGoogleLogin = async (method: 'popup' | 'redirect' = 'popup') => {
     if (!auth) return;
@@ -46,8 +81,6 @@ export default function LoginPage() {
     
     try {
       const provider = new GoogleAuthProvider();
-      
-      // Using only drive.file to avoid restricted verification as requested
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       
       provider.setCustomParameters({
@@ -68,7 +101,6 @@ export default function LoginPage() {
         }
         router.push('/dashboard');
       } else {
-        // Redirect method is more reliable in Workstation/Proxy environments
         await signInWithRedirect(auth, provider);
       }
       
@@ -79,7 +111,7 @@ export default function LoginPage() {
         setIsUnauthorizedDomain(true);
       } else if (err.code === 'auth/popup-closed-by-user') {
         setIsPopupClosed(true);
-        setUseRedirect(true); // Suggest redirect on popup failure
+        setUseRedirect(true);
       } else {
         setError(err.message || "An unknown authentication error occurred.");
       }
@@ -88,7 +120,7 @@ export default function LoginPage() {
         variant: 'destructive',
         title: 'Authentication Failed',
         description: err.code === 'auth/popup-closed-by-user' 
-          ? "Login window was blocked or closed. Try the Redirect method." 
+          ? "Login window was blocked. Try the Redirect method." 
           : err.message,
       });
     } finally {
@@ -96,12 +128,12 @@ export default function LoginPage() {
     }
   };
 
-  if (isUserLoading || user) {
+  if (isUserLoading || (user && !isProcessingRedirect) || isProcessingRedirect) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center space-y-6">
         <Loader2 className="size-20 animate-spin text-blue-500" />
         <h1 className="text-5xl font-black text-white uppercase tracking-tighter">
-          Synchronizing...
+          {isProcessingRedirect ? "Completing Sync..." : "Synchronizing..."}
         </h1>
       </div>
     );
@@ -154,7 +186,7 @@ export default function LoginPage() {
                 className="w-full h-16 text-xl font-bold border-white/10 text-white/40 hover:text-white hover:bg-white/5 rounded-2xl flex items-center justify-center gap-4"
               >
                 {isLoggingIn && useRedirect ? <Loader2 className="size-6 animate-spin" /> : <ArrowRight className="size-6" />}
-                Try Redirect Login (More Stable)
+                Use Redirect Login (Reliable Fallback)
               </Button>
             </div>
 
@@ -163,8 +195,7 @@ export default function LoginPage() {
                 <AlertTriangle className="size-6" />
                 <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Popup Interrupted</AlertTitle>
                 <AlertDescription className="text-xs leading-relaxed italic">
-                  The login window was blocked or closed. This is common in preview environments. 
-                  Please use the **Redirect Login** button above for a more stable connection.
+                  The login window was blocked. Please use the **Redirect Login** button above for a 100% stable connection.
                 </AlertDescription>
               </Alert>
             )}
@@ -174,20 +205,8 @@ export default function LoginPage() {
                 <Globe className="size-6" />
                 <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Domain Authorization Required</AlertTitle>
                 <AlertDescription className="text-xs leading-relaxed italic">
-                  To log in from this preview URL, you must add <span className="font-bold text-white underline">{typeof window !== 'undefined' ? window.location.hostname : 'this domain'}</span> to your 
-                  <span className="font-bold text-white"> Firebase Console > Authentication > Settings > Authorized Domains</span>.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {!isUnauthorizedDomain && !isPopupClosed && (
-              <Alert className="bg-blue-600/10 border-blue-600/20 text-blue-400 p-6 rounded-2xl">
-                <InfoIcon className="size-6" />
-                <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Bypass Verification</AlertTitle>
-                <AlertDescription className="text-xs leading-relaxed italic">
-                  Google will show a "Google hasn't verified this app" screen. 
-                  Click <span className="font-bold text-white underline mx-1">Advanced</span> then 
-                  <span className="font-bold text-white underline mx-1">Go to StudyForge (unsafe)</span> to proceed.
+                  Add <span className="font-bold text-white underline">{typeof window !== 'undefined' ? window.location.hostname : 'this domain'}</span> to your 
+                  <span className="font-bold text-white"> Firebase Console > Authorized Domains</span>.
                 </AlertDescription>
               </Alert>
             )}
@@ -201,13 +220,6 @@ export default function LoginPage() {
                 </AlertDescription>
               </Alert>
             )}
-
-            <div className="flex flex-col items-center gap-4 text-slate-500 italic text-center">
-              <div className="flex items-center gap-2">
-                <Mail className="size-5" />
-                <span className="text-sm font-bold uppercase tracking-widest">Workspace HUD v3.5</span>
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>
