@@ -4,8 +4,6 @@
  */
 
 export async function fetchGoogleSlides(accessToken: string) {
-  // Query only for presentations. With drive.file scope, this only returns 
-  // files created or opened by this specific app.
   const query = encodeURIComponent("mimeType='application/vnd.google-apps.presentation' and trashed = false");
   const fields = encodeURIComponent("files(id, name, modifiedTime, thumbnailLink)");
   
@@ -35,11 +33,41 @@ export async function fetchGoogleSlides(accessToken: string) {
   return data.files || [];
 }
 
+/**
+ * Fetches speaker notes for all slides in a presentation.
+ */
+export async function fetchSpeakerNotes(accessToken: string, presentationId: string) {
+  const url = `https://slides.googleapis.com/v1/presentations/${presentationId}`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Slides API Error: ${response.status} - ${errorBody}`);
+  }
+
+  const data = await response.json();
+  return data.slides.map((slide: any) => {
+    const notesPage = slide.notesPage;
+    if (!notesPage) return "No notes for this slide.";
+    
+    const notesElement = notesPage.pageElements?.find((el: any) => el.shape?.shapeType === 'SPEAKER_NOTES');
+    if (!notesElement || !notesElement.shape.text) return "No notes for this slide.";
+    
+    return notesElement.shape.text.textElements
+      .map((te: any) => te.textRun?.content || "")
+      .join("")
+      .trim();
+  });
+}
+
 export async function getOrCreateLibraryFolder(accessToken: string) {
   const folderName = 'StudyForge_Library';
   const query = encodeURIComponent(`name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed = false`);
   
-  // 1. Try to find the folder
   const findResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -49,7 +77,6 @@ export async function getOrCreateLibraryFolder(accessToken: string) {
     return findData.files[0].id;
   }
 
-  // 2. Create it if not found
   const createResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
     headers: {
@@ -70,7 +97,6 @@ export async function uploadFileToDrive(accessToken: string, file: File, folderI
   const metadata = {
     name: file.name,
     parents: [folderId],
-    // If it's a PPTX, we can ask Google to convert it to a Slide
     mimeType: file.name.endsWith('.pptx') ? 'application/vnd.google-apps.presentation' : undefined
   };
 
