@@ -1,6 +1,6 @@
 /**
  * Utility functions for interacting with Google Drive and Slides APIs.
- * Includes enhanced logging for audit purposes.
+ * Includes enhanced logging for audit purposes and folder management.
  */
 
 export async function fetchGoogleSlides(accessToken: string) {
@@ -35,6 +35,63 @@ export async function fetchGoogleSlides(accessToken: string) {
   return data.files || [];
 }
 
+export async function getOrCreateLibraryFolder(accessToken: string) {
+  const folderName = 'StudyForge_Library';
+  const query = encodeURIComponent(`name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed = false`);
+  
+  // 1. Try to find the folder
+  const findResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  
+  const findData = await findResponse.json();
+  if (findData.files && findData.files.length > 0) {
+    return findData.files[0].id;
+  }
+
+  // 2. Create it if not found
+  const createResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+    }),
+  });
+
+  const createData = await createResponse.json();
+  return createData.id;
+}
+
+export async function uploadFileToDrive(accessToken: string, file: File, folderId: string) {
+  const metadata = {
+    name: file.name,
+    parents: [folderId],
+    // If it's a PPTX, we can ask Google to convert it to a Slide
+    mimeType: file.name.endsWith('.pptx') ? 'application/vnd.google-apps.presentation' : undefined
+  };
+
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', file);
+
+  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Upload failed: ${response.status} - ${errorBody}`);
+  }
+
+  return await response.json();
+}
+
 export async function createGoogleSlides(accessToken: string, title: string) {
   const response = await fetch('https://www.googleapis.com/slides/v1/presentations', {
     method: 'POST',
@@ -56,9 +113,8 @@ export async function createGoogleSlides(accessToken: string, title: string) {
 }
 
 export async function addSlidesContent(accessToken: string, presentationId: string, slides: { title: string; content: string }[]) {
-  // Map our AI output to Google Slides batchUpdate requests
   const requests = slides.flatMap((slide, index) => {
-    const slideId = `slide_${index + 1}`; // Avoid index 0 which is usually the default first slide
+    const slideId = `slide_${index + 1}`;
     return [
       {
         createSlide: {
@@ -69,7 +125,7 @@ export async function addSlidesContent(accessToken: string, presentationId: stri
       },
       {
         insertText: {
-          objectId: `${slideId}_title`, // TITLE_AND_BODY layout usually has these placeholders
+          objectId: `${slideId}_title`,
           text: slide.title,
         },
       },

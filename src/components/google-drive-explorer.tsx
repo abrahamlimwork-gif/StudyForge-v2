@@ -1,14 +1,28 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { fetchGoogleSlides } from '@/lib/google-api-utils';
+import { fetchGoogleSlides, getOrCreateLibraryFolder, uploadFileToDrive } from '@/lib/google-api-utils';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
 import { Input } from './ui/input';
-import { FileText, Loader2, RefreshCw, Presentation, ShieldCheck, ExternalLink, AlertCircle, Lock, Bug, Plus, Info } from 'lucide-react';
+import { 
+  FileText, 
+  Loader2, 
+  RefreshCw, 
+  Presentation, 
+  ShieldCheck, 
+  ExternalLink, 
+  AlertCircle, 
+  Lock, 
+  Plus, 
+  Info,
+  UploadCloud,
+  CheckCircle2
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { cn } from '@/lib/utils';
 
 interface GoogleFile {
   id: string;
@@ -19,6 +33,8 @@ interface GoogleFile {
 export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: string) => void }) {
   const [files, setFiles] = useState<GoogleFile[]>([]);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const [hasToken, setHasToken] = useState(false);
   const [apiError, setApiError] = useState<{ status: number; body: string } | null>(null);
   const [manualId, setManualId] = useState('');
@@ -64,7 +80,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     
     try {
       const provider = new GoogleAuthProvider();
-      // Using drive.file to bypass restricted scope verification
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.addScope('https://www.googleapis.com/auth/presentations');
       
@@ -93,6 +108,60 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    const token = localStorage.getItem('google_access_token');
+    if (!token) {
+      toast({ variant: 'destructive', title: "Not Connected", description: "Please link your Google account first." });
+      return;
+    }
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      
+      // Validation
+      const isAllowed = file.name.endsWith('.pptx') || file.name.endsWith('.pdf');
+      if (!isAllowed) {
+        toast({ variant: 'destructive', title: "Unsupported File", description: "Please drop a .pptx or .pdf file." });
+        return;
+      }
+
+      setUploading(true);
+      toast({ title: "Uploading...", description: `Preparing ${file.name} for Drive.` });
+
+      try {
+        const folderId = await getOrCreateLibraryFolder(token);
+        await uploadFileToDrive(token, file, folderId);
+        
+        toast({ 
+          title: "Upload Successful!", 
+          description: "File added to StudyForge_Library.",
+          action: <CheckCircle2 className="text-green-500" />
+        });
+        
+        await loadFiles(token);
+      } catch (err: any) {
+        console.error("Upload Error:", err);
+        toast({ variant: 'destructive', title: "Upload Failed", description: "Check Drive API permissions or re-authenticate." });
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
@@ -175,11 +244,35 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           onClick={() => loadFiles()} 
           className="h-8 w-8 text-white/20 hover:text-white"
         >
-          <RefreshCw className="h-3 w-3" />
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
         </Button>
       </div>
 
-      <div className="p-4 bg-blue-600/5 border-b border-white/5">
+      <div 
+        className={cn(
+          "m-4 p-8 border-2 border-dashed rounded-3xl transition-all flex flex-col items-center justify-center text-center space-y-3 relative group",
+          dragActive ? "border-blue-500 bg-blue-500/10 scale-[1.02]" : "border-white/5 bg-black/20 hover:border-white/10",
+          uploading && "opacity-50 pointer-events-none"
+        )}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={handleDrop}
+      >
+        {uploading ? (
+          <Loader2 className="size-8 text-blue-400 animate-spin" />
+        ) : (
+          <UploadCloud className={cn("size-8 transition-colors", dragActive ? "text-blue-400" : "text-white/10 group-hover:text-white/20")} />
+        )}
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-white/40">
+            {uploading ? "Syncing to Drive..." : "Drop to Upload"}
+          </p>
+          <p className="text-[8px] text-white/10 mt-1 uppercase font-bold">.pptx or .pdf only</p>
+        </div>
+      </div>
+
+      <div className="px-4 pb-4">
         <div className="flex gap-2">
           <Input 
             placeholder="Paste Slide ID..." 
@@ -191,18 +284,15 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
             <Plus className="h-4 w-4" />
           </Button>
         </div>
-        <p className="text-[8px] text-white/20 mt-2 flex items-center gap-1">
-          <Info className="h-2 w-2" /> Manual import for files not created by AI.
-        </p>
       </div>
 
       <ScrollArea className="flex-grow">
         <div className="p-4 space-y-3">
           {files.length === 0 ? (
             <div className="text-center p-10 border-2 border-dashed border-white/5 rounded-3xl opacity-20 space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest">No AI Slides Yet</p>
+              <p className="text-[10px] font-black uppercase tracking-widest">No Slides Found</p>
               <p className="text-[8px] italic leading-relaxed">
-                Using 'drive.file' scope: Only files created here will appear automatically.
+                Drop a file above to begin your library.
               </p>
             </div>
           ) : (
@@ -241,7 +331,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           }}
           className="w-full h-10 text-[9px] font-black uppercase tracking-widest text-white/10 hover:text-red-400"
         >
-          Disconnect Workspace
+          Disconnect Account
         </Button>
       </div>
     </div>
