@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useUser, useAuth } from '@/firebase';
+import { useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { 
   ArrowLeft, 
@@ -15,12 +14,11 @@ import {
   Clock,
   Sparkles,
   Loader2,
-  ShieldCheck
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleDriveExplorer } from '@/components/google-drive-explorer';
 import { generateSermonSlides } from '@/ai/flows/generate-sermon-slides';
-import { createGoogleSlides } from '@/lib/google-api-utils';
+import { createGoogleSlides, addSlidesContent } from '@/lib/google-api-utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default function PresenterDashboard() {
@@ -34,6 +32,7 @@ export default function PresenterDashboard() {
   const [currentTime, setCurrentTime] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     setCurrentTime(new Date().toLocaleTimeString());
@@ -43,14 +42,13 @@ export default function PresenterDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Check connection status based on token presence
   useEffect(() => {
     const checkStatus = () => {
       const token = localStorage.getItem('google_access_token');
       setIsGoogleConnected(!!token);
     };
     checkStatus();
-    const interval = setInterval(checkStatus, 2000); // Poll for connection changes
+    const interval = setInterval(checkStatus, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -77,12 +75,25 @@ export default function PresenterDashboard() {
 
     try {
       setIsGenerating(true);
-      const data = await generateSermonSlides({ topic: "The Power of Grace" });
-      const presentation = await createGoogleSlides(token, data.title);
+      toast({ title: "Thinking...", description: "AI is outlining your sermon now." });
+      
+      // 1. Generate Content
+      const data = await generateSermonSlides({ topic: "The Power of Grace", scripture: "Ephesians 2:8" });
+      
+      // 2. Create Presentation
+      const presentation = await createGoogleSlides(token, `AI Sermon: ${data.title}`);
+      
+      // 3. Populate Content
+      await addSlidesContent(token, presentation.presentationId, data.slides);
+      
+      // 4. Update UI
       setSelectedFileId(presentation.presentationId);
-      toast({ title: "Sermon Created!", description: "AI presentation saved to your Google Drive." });
-    } catch (err) {
-      toast({ variant: 'destructive', title: 'AI Error', description: 'Failed to generate sermon slides.' });
+      setRefreshKey(prev => prev + 1); // Refresh library list
+      
+      toast({ title: "Sermon Ready!", description: "AI presentation created and saved to your Drive." });
+    } catch (err: any) {
+      console.error("AI Slide Gen Error:", err);
+      toast({ variant: 'destructive', title: 'Automation Failed', description: err.message || 'Failed to sync slides to Drive.' });
     } finally {
       setIsGenerating(false);
     }
@@ -112,7 +123,7 @@ export default function PresenterDashboard() {
               className="border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 h-12 px-6 font-black text-xs tracking-widest rounded-xl"
             >
               {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              AI SERMON GEN
+              AI AUTO-GEN SLIDES
             </Button>
           )}
 
@@ -144,7 +155,7 @@ export default function PresenterDashboard() {
       <main className="flex-grow flex overflow-hidden">
         
         <aside className="w-1/4 min-w-[350px] border-r border-white/5 bg-slate-900 flex flex-col overflow-hidden">
-          <GoogleDriveExplorer onFileSelect={setSelectedFileId} />
+          <GoogleDriveExplorer key={refreshKey} onFileSelect={setSelectedFileId} />
         </aside>
 
         <section className="flex-grow border-r border-white/5 bg-black flex flex-col relative overflow-hidden">
@@ -165,8 +176,8 @@ export default function PresenterDashboard() {
                 </h3>
                 <p className="text-lg text-white/10 max-w-sm italic font-medium">
                   {isGoogleConnected 
-                    ? "Select a presentation from the library to begin your broadcast."
-                    : "Connect your Google Drive in the sidebar to start presenting."}
+                    ? "Generate an AI sermon or select a file from the library to begin."
+                    : "Connect your Workspace in the sidebar to sync your sermon library."}
                 </p>
               </div>
             </div>
@@ -203,7 +214,7 @@ export default function PresenterDashboard() {
           </span>
         </div>
         <div className="text-[11px] font-black text-white/10 uppercase italic tracking-widest">
-          StudyForge v3.5 Workspace-HUD
+          StudyForge v3.5 • GenAI Slides Powered
         </div>
       </footer>
     </div>

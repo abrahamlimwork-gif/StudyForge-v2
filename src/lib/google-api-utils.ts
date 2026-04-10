@@ -4,8 +4,9 @@
  */
 
 export async function fetchGoogleSlides(accessToken: string) {
-  // Query only for presentations created by this app (drive.file)
-  const query = encodeURIComponent("mimeType='application/vnd.google-apps.presentation'");
+  // Query only for presentations. With drive.file scope, this only returns 
+  // files created or opened by this specific app.
+  const query = encodeURIComponent("mimeType='application/vnd.google-apps.presentation' and trashed = false");
   const fields = encodeURIComponent("files(id, name, modifiedTime, thumbnailLink)");
   
   const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${fields}`;
@@ -24,7 +25,6 @@ export async function fetchGoogleSlides(accessToken: string) {
       body: errorBody
     });
     
-    // Create a structured error object for the UI to consume
     const error: any = new Error(`Drive API Error: ${response.status}`);
     error.status = response.status;
     error.body = errorBody;
@@ -56,19 +56,20 @@ export async function createGoogleSlides(accessToken: string, title: string) {
 }
 
 export async function addSlidesContent(accessToken: string, presentationId: string, slides: { title: string; content: string }[]) {
+  // Map our AI output to Google Slides batchUpdate requests
   const requests = slides.flatMap((slide, index) => {
-    const slideId = `slide_${index}`;
+    const slideId = `slide_${index + 1}`; // Avoid index 0 which is usually the default first slide
     return [
       {
         createSlide: {
           objectId: slideId,
-          insertionIndex: index,
+          insertionIndex: index + 1,
           slideLayoutReference: { predefinedLayout: 'TITLE_AND_BODY' },
         },
       },
       {
         insertText: {
-          objectId: `${slideId}_title`,
+          objectId: `${slideId}_title`, // TITLE_AND_BODY layout usually has these placeholders
           text: slide.title,
         },
       },

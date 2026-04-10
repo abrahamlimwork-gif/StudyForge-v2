@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { InfoIcon, Loader2, ShieldCheck, Mail } from 'lucide-react';
+import { InfoIcon, Loader2, ShieldCheck, Mail, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -39,7 +39,7 @@ export default function LoginPage() {
     try {
       const provider = new GoogleAuthProvider();
       
-      // Using only the strictly required scopes for project 210492515699
+      // Strict scopes for drive.file (non-restricted)
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.addScope('https://www.googleapis.com/auth/presentations');
       
@@ -55,7 +55,7 @@ export default function LoginPage() {
         localStorage.setItem('google_access_token', credential.accessToken);
         toast({ 
           title: "Workspace Authorized", 
-          description: `Welcome! Your Google Drive connection is now active.` 
+          description: `Note: Click 'Advanced > Go to StudyForge' if prompted by Google.` 
         });
       }
       
@@ -123,6 +123,16 @@ export default function LoginPage() {
               )}
             </Button>
 
+            <Alert className="bg-blue-600/10 border-blue-600/20 text-blue-400 p-6 rounded-2xl">
+              <InfoIcon className="size-6" />
+              <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Bypass Verification</AlertTitle>
+              <AlertDescription className="text-xs leading-relaxed italic">
+                Because this app is in development, Google will show a "Google hasn't verified this app" screen. 
+                Click <span className="font-bold text-white underline mx-1">Advanced</span> then 
+                <span className="font-bold text-white underline mx-1">Go to StudyForge (unsafe)</span> to proceed.
+              </AlertDescription>
+            </Alert>
+
             {error && (
               <Alert variant="destructive" className="border-red-500/50 bg-red-500/10 text-red-400">
                 <InfoIcon className="size-6" />
@@ -136,10 +146,10 @@ export default function LoginPage() {
             <div className="flex flex-col items-center gap-4 text-slate-500 italic text-center">
               <div className="flex items-center gap-2">
                 <Mail className="size-5" />
-                <span className="text-sm font-bold uppercase tracking-widest">Workspace Required</span>
+                <span className="text-sm font-bold uppercase tracking-widest">Workspace HUD v3.5</span>
               </div>
-              <p className="max-w-md text-sm leading-relaxed">
-                Log in to enable Google Slides synchronization and AI-powered sermon generation for Project 210492515699.
+              <p className="max-w-md text-[10px] leading-relaxed">
+                Uses 'drive.file' scope for secure AI slide generation in Project 210492515699.
               </p>
             </div>
           </div>
