@@ -1,66 +1,46 @@
-
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
 import { 
   ArrowLeft, 
   Check, 
   Share2, 
   ExternalLink, 
-  Plus, 
-  Minus, 
-  Search, 
-  Maximize2, 
-  Minimize2,
-  Highlighter,
-  Save,
+  FileText, 
+  Upload, 
+  Monitor, 
+  Settings,
   BookOpen,
-  ChevronRight,
-  ChevronLeft,
-  Loader2
+  Layout,
+  Clock,
+  MoreVertical,
+  ChevronLeft
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useFirestore, useDoc, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
-export default function PreacherCommandCenter() {
+export default function PresenterDashboard() {
   const { sessionId } = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const db = useFirestore();
 
-  // --- Layout State ---
-  const [fontSize, setFontSize] = useState(24);
-  const [isMeetingMode, setIsMeetingMode] = useState(false);
-  const [isBibleVisible, setIsBibleVisible] = useState(true);
-  
-  // --- Functional State ---
+  // --- Layout & Functional State ---
   const [hasCopied, setHasCopied] = useState(false);
-  const [finishedParagraphs, setFinishedParagraphs] = useState<number[]>([]);
-  const [localNotes, setLocalNotes] = useState('');
+  const [slidesUrl, setSlidesUrl] = useState('https://docs.google.com/presentation/d/1_S0Z0YxXW-Z8E2E-eE0E0E0E0E0E0E0E0E0E/present');
   const [currentTime, setCurrentTime] = useState<string | null>(null);
 
-  // --- Bible Sidebar State ---
-  const [bibleQuery, setBibleQuery] = useState('Juan 3:16');
-  const [bibleVersion, setBibleVersion] = useState('MBBTAG');
-  const [isBibleLoading, setIsBibleLoading] = useState(false);
-  const [iframeUrl, setIframeUrl] = useState(`https://www.biblegateway.com/passage/?search=Juan 3:16&version=MBBTAG&interface=print`);
-
-  // --- Hydration Fix ---
+  // --- Hydration Fix for Clock ---
   useEffect(() => {
     setCurrentTime(new Date().toLocaleTimeString());
     const timer = setInterval(() => {
@@ -69,31 +49,6 @@ export default function PreacherCommandCenter() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- Firestore Integration ---
-  const sessionDocRef = useMemoFirebase(() => {
-    if (!db || !sessionId) return null;
-    return doc(db, 'public_sessions', sessionId as string);
-  }, [db, sessionId]);
-
-  const { data: sessionData } = useDoc(sessionDocRef);
-
-  useEffect(() => {
-    if (sessionData?.notes && !localNotes) {
-      setLocalNotes(sessionData.notes);
-    }
-  }, [sessionData]);
-
-  useEffect(() => {
-    if (!sessionDocRef || localNotes === (sessionData?.notes || '')) return;
-    const timeout = setTimeout(() => {
-      updateDocumentNonBlocking(sessionDocRef, { 
-        notes: localNotes,
-        updatedAt: new Date().toISOString() 
-      });
-    }, 1000);
-    return () => clearTimeout(timeout);
-  }, [localNotes, sessionDocRef, sessionData?.notes]);
-
   // --- Actions ---
   const roomName = typeof sessionId === 'string' ? sessionId : 'TestSession';
   const jitsiUrl = `https://meet.jit.si/${roomName}`;
@@ -101,226 +56,190 @@ export default function PreacherCommandCenter() {
   const copyInviteLink = () => {
     navigator.clipboard.writeText(jitsiUrl);
     setHasCopied(true);
-    toast({ title: "Link Copied!", description: "Share this link with your congregation." });
+    toast({ title: "Invite Link Copied!", description: "Share this URL with your participants." });
     setTimeout(() => setHasCopied(false), 2000);
   };
 
-  const handleBibleSearch = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!bibleQuery.trim()) return;
-    setIsBibleLoading(true);
-    setIframeUrl(`https://www.biblegateway.com/passage/?search=${encodeURIComponent(bibleQuery)}&version=${bibleVersion}&interface=print`);
-  };
-
-  const toggleParagraph = (index: number) => {
-    setFinishedParagraphs(prev => 
-      prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
-    );
-  };
-
-  const manuscriptParagraphs = [
-    "Opening Prayer: Gracious Lord, we thank You for this gathering. Open our hearts to Your Word today.",
-    "The core of our message today is 'Unyielding Faith'. In a world of shifting sands, we find our rock in Christ.",
-    "Reflect on Hebrews 11:1. Faith is not just a feeling, but the substance of what we hope for.",
-    "Key Point: Persistence is developed in the trials, not the triumphs. James 1:12 reminds us of the crown of life.",
-    "Conclusion: As you leave this virtual sanctuary, carry this persistence with you. Amen."
+  // Mock File Data
+  const libraryFiles = [
+    { id: '1', name: 'Sermon_Notes_Week4.pdf', size: '1.2MB', date: '2023-10-24' },
+    { id: '2', name: 'Intro_Video.mp4', size: '45MB', date: '2023-10-23' },
+    { id: '3', name: 'Presentation_Slides.pptx', size: '5.4MB', date: '2023-10-22' },
+    { id: '4', name: 'Scripture_Ref_Sheet.docx', size: '450KB', date: '2023-10-20' },
   ];
 
   return (
-    <div className={cn("h-screen flex flex-col bg-background transition-all", isMeetingMode ? "overflow-hidden" : "")}>
-      {!isMeetingMode && <Navbar />}
+    <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden">
       
-      {/* Persistent Toolbar */}
-      <div className="bg-white border-b px-8 py-3 flex items-center justify-between shadow-sm z-50 shrink-0">
-        <div className="flex items-center gap-4">
-          {!isMeetingMode && (
-            <Button variant="ghost" size="lg" onClick={() => router.push('/dashboard')} className="text-lg font-bold">
-              <ArrowLeft className="mr-2" /> Back
-            </Button>
-          )}
-          <h1 className="text-2xl font-black text-primary uppercase hidden md:block">
-            {sessionData?.name || "Session Control"}
+      {/* Persistent Dark Toolbar */}
+      <header className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-slate-950/50 backdrop-blur-md z-50 shrink-0">
+        <div className="flex items-center gap-6">
+          <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')} className="hover:bg-white/10 text-white/70">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Exit
+          </Button>
+          <div className="h-4 w-px bg-white/10" />
+          <h1 className="text-lg font-black tracking-tighter uppercase flex items-center gap-2">
+            <Monitor className="h-5 w-5 text-blue-400" />
+            <span>Presenter HUD</span>
+            <span className="text-xs font-mono bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded ml-2">LIVE</span>
           </h1>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button onClick={copyInviteLink} variant="outline" size="lg" className="h-12 text-lg font-bold px-6">
-            {hasCopied ? <Check className="mr-2" /> : <Share2 className="mr-2" />}
-            {hasCopied ? "COPIED" : "COPY LINK"}
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-2 text-sm font-mono text-white/40 mr-4">
+            <Clock className="h-4 w-4" /> {currentTime || '--:--:--'}
+          </div>
+          
+          <Button onClick={copyInviteLink} variant="outline" className="border-white/20 hover:bg-white/10 h-10 px-4">
+            {hasCopied ? <Check className="mr-2 h-4 w-4" /> : <Share2 className="mr-2 h-4 w-4" />}
+            {hasCopied ? "COPIED" : "INVITE LINK"}
           </Button>
-          <Button onClick={() => window.open(jitsiUrl, '_blank')} variant="secondary" size="lg" className="h-12 text-lg font-black px-6 shadow-md">
-            <ExternalLink className="mr-2" /> LAUNCH VIDEO
-          </Button>
+
           <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsMeetingMode(!isMeetingMode)}
-            className="h-12 w-12 border"
+            onClick={() => window.open(jitsiUrl, '_blank')} 
+            className="bg-blue-600 hover:bg-blue-500 text-white font-bold h-10 px-6 shadow-lg shadow-blue-500/20"
           >
-            {isMeetingMode ? <Minimize2 /> : <Maximize2 />}
+            <ExternalLink className="mr-2 h-4 w-4" /> LAUNCH JITSI
           </Button>
-        </div>
-      </div>
 
-      <main className="flex-grow flex flex-row overflow-hidden bg-[#f8fafc]">
-        
-        {/* Left Column: Live Notes (25%) */}
-        <aside className="w-[25%] bg-slate-50 flex flex-col border-r-2">
-          <div className="p-6 bg-white border-b flex items-center justify-between">
-            <h2 className="text-xl font-black uppercase text-slate-500 flex items-center gap-2">
-              <Save className="size-5" /> Live Notes
-            </h2>
-            <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse" title="Auto-saving enabled" />
-          </div>
-          <div className="flex-grow p-6 flex flex-col">
-            <Textarea 
-              placeholder="Jot down inspiration here... (Auto-saves)"
-              className="flex-grow text-xl p-6 border-2 focus:ring-4 rounded-2xl shadow-inner resize-none bg-white"
-              value={localNotes}
-              onChange={(e) => setLocalNotes(e.target.value)}
-            />
-          </div>
-          <div className="p-4 bg-slate-100 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">
-            Cloud Sync Active • {currentTime || 'Initializing...'}
-          </div>
-        </aside>
-
-        {/* Middle Column: Manuscript (Flex) */}
-        <section className="flex-grow bg-white shadow-lg z-10 flex flex-col border-r-2 overflow-hidden">
-          <div className="p-4 bg-slate-50 border-b flex justify-between items-center px-8">
-            <div className="flex items-center gap-2">
-              <Highlighter className="size-5 text-accent" />
-              <span className="text-sm font-black text-slate-500 uppercase">Manuscript Mode</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => setFontSize(f => Math.max(16, f - 2))}><Minus /></Button>
-              <span className="font-mono font-bold w-12 text-center text-xl">{fontSize}px</span>
-              <Button variant="outline" size="icon" onClick={() => setFontSize(f => Math.min(48, f + 2))}><Plus /></Button>
-            </div>
-          </div>
-
-          <ScrollArea className="flex-grow">
-            <article className="max-w-3xl mx-auto py-12 px-12 space-y-12">
-              {manuscriptParagraphs.map((para, idx) => (
-                <div 
-                  key={idx}
-                  onClick={() => toggleParagraph(idx)}
-                  className={cn(
-                    "cursor-pointer transition-all p-6 rounded-2xl border-2 border-transparent hover:border-slate-100",
-                    finishedParagraphs.includes(idx) ? "opacity-30 bg-slate-50" : "opacity-100"
-                  )}
-                  style={{ fontSize: `${fontSize}px`, lineHeight: 1.5 }}
-                >
-                  <p className={cn(
-                    "font-medium text-slate-900",
-                    finishedParagraphs.includes(idx) ? "line-through" : ""
-                  )}>
-                    {para}
-                  </p>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-10 w-10 text-white/50 hover:text-white">
+                <Settings className="h-5 w-5" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-slate-900 border-white/10 text-white">
+              <DialogHeader>
+                <DialogTitle>HUD Settings</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-white/40">Google Slides Embed URL</label>
+                  <Input 
+                    value={slidesUrl} 
+                    onChange={(e) => setSlidesUrl(e.target.value)} 
+                    className="bg-black/40 border-white/10 h-12"
+                    placeholder="https://docs.google.com/presentation/d/.../embed"
+                  />
+                  <p className="text-[10px] text-white/30 italic">Note: Use '/present' or '/embed' URL for the best HUD experience.</p>
                 </div>
-              ))}
-              <div className="h-32" />
-            </article>
-          </ScrollArea>
-        </section>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </header>
 
-        {/* Right Column: Bible Sidebar (380px, Collapsible) */}
-        <aside 
-          className={cn(
-            "bg-white flex flex-col border-l-2 transition-all duration-300 relative",
-            isBibleVisible ? "w-[380px]" : "w-0 overflow-hidden"
-          )}
-        >
-          {/* Collapse Toggle */}
-          <Button
-            variant="secondary"
-            size="icon"
-            onClick={() => setIsBibleVisible(!isBibleVisible)}
-            className="absolute -left-5 top-1/2 -translate-y-1/2 z-50 rounded-full shadow-lg h-10 w-10 border-2"
-          >
-            {isBibleVisible ? <ChevronRight /> : <ChevronLeft />}
-          </Button>
-
-          {isBibleVisible && (
-            <>
-              <div className="p-6 bg-slate-50 border-b space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-black uppercase text-primary flex items-center gap-2">
-                    <BookOpen className="size-6" /> Bible Reference
-                  </h2>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-slate-400 hover:text-primary"
-                    onClick={() => window.open(iframeUrl.replace('&interface=print', ''), '_blank')}
-                    title="Open in Full Page"
-                  >
-                    <ExternalLink className="size-4" />
+      {/* Main 3-Column Layout */}
+      <main className="flex-grow flex overflow-hidden">
+        
+        {/* Left Column: File Library (25%) */}
+        <aside className="w-1/4 min-w-[300px] border-r border-white/5 bg-slate-950/20 flex flex-col overflow-hidden">
+          <div className="p-5 flex items-center justify-between border-b border-white/5 bg-white/5">
+            <h2 className="text-xs font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Media Library
+            </h2>
+            <Button size="sm" variant="secondary" className="h-8 text-xs font-bold px-3">
+              <Upload className="h-3 w-3 mr-1" /> UPLOAD
+            </Button>
+          </div>
+          
+          <ScrollArea className="flex-grow">
+            <div className="p-4 space-y-3">
+              {libraryFiles.map((file) => (
+                <div 
+                  key={file.id} 
+                  className="group p-4 bg-white/5 hover:bg-white/10 border border-transparent hover:border-white/10 rounded-xl transition-all cursor-pointer flex items-center gap-4"
+                >
+                  <div className="h-10 w-10 bg-slate-800 rounded-lg flex items-center justify-center text-blue-400">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <p className="text-sm font-bold truncate text-white/90">{file.name}</p>
+                    <p className="text-[10px] font-mono text-white/30 uppercase mt-0.5">{file.size} • {file.date}</p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 h-8 w-8 text-white/40">
+                    <MoreVertical className="h-4 w-4" />
                   </Button>
                 </div>
-                
-                <form onSubmit={handleBibleSearch} className="space-y-3">
-                  <div className="space-y-1">
-                    <span className="text-xs font-black text-slate-400 uppercase">Version</span>
-                    <Select value={bibleVersion} onValueChange={setBibleVersion}>
-                      <SelectTrigger className="w-full h-11 text-lg font-bold border-2">
-                        <SelectValue placeholder="Select Version" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="MBBTAG">Tagalog: MBBTAG</SelectItem>
-                        <SelectItem value="TAG">Tagalog: Ang Biblia</SelectItem>
-                        <SelectItem value="NIV">English: NIV</SelectItem>
-                        <SelectItem value="ESV">English: ESV</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-xs font-black text-slate-400 uppercase">Scripture</span>
-                    <div className="relative">
-                      <Input 
-                        placeholder="Juan 3:16" 
-                        className="h-12 text-lg pl-10 border-2 font-bold"
-                        value={bibleQuery}
-                        onChange={(e) => setBibleQuery(e.target.value)}
-                      />
-                      <Search className="absolute left-3 top-3.5 text-slate-400 size-5" />
-                      <Button 
-                        type="submit"
-                        size="sm" 
-                        className="absolute right-1.5 top-1.5 h-9 bg-primary text-white"
-                      >
-                        GO
-                      </Button>
-                    </div>
-                  </div>
-                </form>
+              ))}
+              
+              <div className="mt-8 p-6 border-2 border-dashed border-white/5 rounded-2xl text-center">
+                <p className="text-xs text-white/20 font-medium">Drop files here to add to session storage</p>
               </div>
-
-              <div className="flex-grow relative bg-white overflow-hidden">
-                {isBibleLoading && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/80 animate-in fade-in">
-                    <Loader2 className="size-10 text-primary animate-spin mb-2" />
-                    <p className="text-sm font-black text-slate-500 uppercase">Loading Scripture...</p>
-                  </div>
-                )}
-                {/* 
-                  Clipping BibleGateway header:
-                  We wrap the iframe and apply a negative top margin to push the redundant 
-                  header/logo out of the visible area of the overflow-hidden container.
-                */}
-                <div className="w-full h-full overflow-hidden">
-                  <iframe 
-                    src={iframeUrl}
-                    className="w-full h-[calc(100%+140px)] -mt-[140px] border-none"
-                    onLoad={() => setIsBibleLoading(false)}
-                  />
-                </div>
-              </div>
-            </>
-          )}
+            </div>
+          </ScrollArea>
         </aside>
+
+        {/* Middle Column: Presenter HUD (50%) */}
+        <section className="flex-grow border-r border-white/5 bg-black flex flex-col relative overflow-hidden">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-4 py-1.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-white/60">
+            <Layout className="h-3 w-3 text-blue-500" />
+            Active Slide Deck
+          </div>
+          
+          <div className="flex-grow w-full bg-slate-900/50 flex items-center justify-center">
+            {/* 
+              Optimized for Google Slides Presenter View. 
+              The iframe fills the center area perfectly. 
+            */}
+            <iframe 
+              src={slidesUrl}
+              className="w-full h-full border-none shadow-2xl"
+              allowFullScreen
+            />
+          </div>
+        </section>
+
+        {/* Right Column: Bible Sidebar (25%) */}
+        <aside className="w-1/4 min-w-[320px] bg-slate-950 flex flex-col overflow-hidden relative">
+          <div className="p-5 border-b border-white/5 bg-slate-900/50 flex items-center justify-between">
+            <h2 className="text-xs font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
+              <BookOpen className="h-4 w-4" /> Scripture Engine
+            </h2>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => window.open('https://www.biblegateway.com', '_blank')}
+              className="h-8 w-8 text-white/30 hover:text-white"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          {/* 
+            Full, unedited BibleGateway integration as requested. 
+            We let the website handle the searching and versioning natively.
+          */}
+          <div className="flex-grow w-full bg-white h-full">
+            <iframe 
+              src="https://www.biblegateway.com"
+              className="w-full h-full border-none"
+              scrolling="yes"
+              title="BibleGateway Native UI"
+            />
+          </div>
+          
+          <div className="p-4 bg-slate-900 border-t border-white/5 text-[10px] text-center font-bold text-white/20 uppercase tracking-[0.2em]">
+            Native Bible Engine Powered by BibleGateway
+          </div>
+        </aside>
+
       </main>
+
+      {/* Footer / Status Bar */}
+      <footer className="h-10 bg-black border-t border-white/5 flex items-center justify-between px-6 shrink-0">
+        <div className="flex items-center gap-4 text-[10px] font-mono text-white/20 uppercase tracking-widest">
+          <span className="flex items-center gap-1.5">
+            <div className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse" />
+            Cloud Storage Connected
+          </span>
+          <span className="opacity-50">|</span>
+          <span>Presenter Role: {sessionId}</span>
+        </div>
+        <div className="text-[10px] font-bold text-white/10 uppercase italic">
+          StudyForge Presenter Suite v2.0
+        </div>
+      </footer>
     </div>
   );
 }

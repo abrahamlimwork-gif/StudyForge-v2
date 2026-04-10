@@ -1,29 +1,29 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 264 25% 97%;
-    --foreground: 260 46% 15%;
-    --card: 0 0% 100%;
-    --card-foreground: 260 46% 15%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 260 46% 15%;
-    --primary: 260 46% 27%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 218 90% 68%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 264 15% 90%;
-    --muted-foreground: 260 20% 40%;
-    --accent: 218 90% 68%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 260 20% 85%;
-    --input: 260 20% 85%;
-    --ring: 260 46% 27%;
+    /* Updated to a default Dark Theme scheme for the Presenter Dashboard */
+    --background: 222 47% 11%;
+    --foreground: 213 31% 91%;
+    --card: 222 47% 11%;
+    --card-foreground: 213 31% 91%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 213 31% 91%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 222 47% 11%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+    --ring: 212.7 26.8% 83.9%;
     --radius: 0.75rem;
   }
 }
@@ -33,15 +33,26 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground text-lg leading-relaxed;
-  }
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-headline font-bold tracking-tight;
+    @apply bg-background text-foreground text-lg leading-relaxed antialiased;
   }
 }
 
-/* Accessibility: Large Focus States */
 :focus-visible {
-  outline: 4px solid hsl(var(--secondary));
+  outline: 4px solid hsl(var(--primary));
   outline-offset: 4px;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--accent));
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
 }
