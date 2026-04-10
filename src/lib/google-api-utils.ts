@@ -17,11 +17,10 @@ export async function fetchGoogleSlides(accessToken: string) {
 
   if (!response.ok) {
     const errorBody = await response.text();
-    console.error("Drive API Error Detail:", {
-      status: response.status,
-      text: response.statusText,
-      body: errorBody
-    });
+    // Explicitly log strings to avoid empty object serialization issues in some consoles
+    console.error(`Drive API Error Status: ${response.status}`);
+    console.error(`Drive API Error Text: ${response.statusText}`);
+    console.error(`Drive API Error Body: ${errorBody}`);
     
     const error: any = new Error(`Drive API Error: ${response.status}`);
     error.status = response.status;
@@ -50,6 +49,8 @@ export async function fetchSpeakerNotes(accessToken: string, presentationId: str
   }
 
   const data = await response.json();
+  if (!data.slides) return [];
+  
   return data.slides.map((slide: any) => {
     const notesPage = slide.notesPage;
     if (!notesPage) return "No notes for this slide.";

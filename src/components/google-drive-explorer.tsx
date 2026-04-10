@@ -15,7 +15,6 @@ import {
   AlertCircle, 
   Lock, 
   Plus, 
-  Info,
   UploadCloud,
   CheckCircle2
 } from 'lucide-react';
@@ -135,7 +134,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       
-      // Validation
       const isAllowed = file.name.endsWith('.pptx') || file.name.endsWith('.pdf');
       if (!isAllowed) {
         toast({ variant: 'destructive', title: "Unsupported File", description: "Please drop a .pptx or .pdf file." });
@@ -186,13 +184,13 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           <div className="space-y-2">
             <h3 className="text-sm font-black uppercase tracking-widest text-white">Sync Failed ({apiError.status})</h3>
             <p className="text-[10px] text-white/40 italic leading-relaxed">
-              Google reported a permission issue. Ensure Drive API is enabled.
+              Google reported an issue. Ensure Drive API is enabled in your Google Cloud Console.
             </p>
           </div>
 
-          <div className="w-full bg-black/40 p-4 rounded-xl border border-white/5 text-left font-mono text-[9px] text-red-300 overflow-auto max-h-[150px]">
-            {apiError.body}
-          </div>
+          <ScrollArea className="w-full bg-black/40 p-4 rounded-xl border border-white/5 text-left font-mono text-[9px] text-red-300 max-h-[150px]">
+            <pre className="whitespace-pre-wrap">{apiError.body}</pre>
+          </ScrollArea>
 
           <div className="w-full space-y-3 pt-4">
             <Button 
@@ -202,7 +200,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
               <ExternalLink className="mr-2 h-4 w-4" /> Enable Drive API
             </Button>
             <Button variant="ghost" onClick={() => loadFiles()} className="w-full h-10 text-[9px] uppercase font-black text-blue-400">
-              <RefreshCw className="mr-2 h-3 w-3" /> Retry
+              <RefreshCw className="mr-2 h-3 w-3" /> Retry Sync
             </Button>
           </div>
         </div>
