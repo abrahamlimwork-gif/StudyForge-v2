@@ -244,9 +244,20 @@ export default function PreacherCommandCenter() {
           {isBibleVisible && (
             <>
               <div className="p-6 bg-slate-50 border-b space-y-4">
-                <h2 className="text-xl font-black uppercase text-primary flex items-center gap-2">
-                  <BookOpen className="size-6" /> Bible Reference
-                </h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-black uppercase text-primary flex items-center gap-2">
+                    <BookOpen className="size-6" /> Bible Reference
+                  </h2>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-slate-400 hover:text-primary"
+                    onClick={() => window.open(iframeUrl.replace('&interface=print', ''), '_blank')}
+                    title="Open in Full Page"
+                  >
+                    <ExternalLink className="size-4" />
+                  </Button>
+                </div>
                 
                 <form onSubmit={handleBibleSearch} className="space-y-3">
                   <div className="space-y-1">
@@ -286,18 +297,25 @@ export default function PreacherCommandCenter() {
                 </form>
               </div>
 
-              <div className="flex-grow relative bg-[#f1f5f9]">
+              <div className="flex-grow relative bg-white overflow-hidden">
                 {isBibleLoading && (
                   <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/80 animate-in fade-in">
                     <Loader2 className="size-10 text-primary animate-spin mb-2" />
                     <p className="text-sm font-black text-slate-500 uppercase">Loading Scripture...</p>
                   </div>
                 )}
-                <iframe 
-                  src={iframeUrl}
-                  className="w-full h-full border-none"
-                  onLoad={() => setIsBibleLoading(false)}
-                />
+                {/* 
+                  Clipping BibleGateway header:
+                  We wrap the iframe and apply a negative top margin to push the redundant 
+                  header/logo out of the visible area of the overflow-hidden container.
+                */}
+                <div className="w-full h-full overflow-hidden">
+                  <iframe 
+                    src={iframeUrl}
+                    className="w-full h-[calc(100%+140px)] -mt-[140px] border-none"
+                    onLoad={() => setIsBibleLoading(false)}
+                  />
+                </div>
               </div>
             </>
           )}
