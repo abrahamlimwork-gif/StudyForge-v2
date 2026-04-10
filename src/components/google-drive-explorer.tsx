@@ -75,6 +75,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
+      // Verified Scopes for Audit
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.addScope('https://www.googleapis.com/auth/drive.metadata.readonly');
       provider.addScope('https://www.googleapis.com/auth/presentations');

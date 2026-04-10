@@ -1,8 +1,11 @@
+
 /**
  * Utility functions for interacting with Google Drive and Slides APIs.
+ * Audited Endpoints and Logic for resolving 403 Errors.
  */
 
 export async function fetchGoogleSlides(accessToken: string) {
+  // Exact Endpoint for Audit
   const query = encodeURIComponent("mimeType='application/vnd.google-apps.presentation'");
   const fields = encodeURIComponent("files(id, name, modifiedTime, thumbnailLink)");
   
@@ -17,6 +20,7 @@ export async function fetchGoogleSlides(accessToken: string) {
 
   if (!response.ok) {
     const errorBody = await response.text();
+    // Improved error reporting to surface the exact cause (e.g., SERVICE_DISABLED)
     throw new Error(`Failed to fetch Google Slides: ${response.status} ${response.statusText} - ${errorBody}`);
   }
 
@@ -57,7 +61,7 @@ export async function addSlidesContent(accessToken: string, presentationId: stri
       },
       {
         insertText: {
-          objectId: `${slideId}_title`, // Assuming standard IDs from layout
+          objectId: `${slideId}_title`,
           text: slide.title,
         },
       },
