@@ -15,12 +15,14 @@ import {
   Clock,
   Sparkles,
   Loader2,
-  LogIn
+  LogIn,
+  User as UserIcon
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleDriveExplorer } from '@/components/google-drive-explorer';
 import { generateSermonSlides } from '@/ai/flows/generate-sermon-slides';
 import { createGoogleSlides } from '@/lib/google-api-utils';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default function PresenterDashboard() {
   const { sessionId } = useParams();
@@ -89,30 +91,42 @@ export default function PresenterDashboard() {
   return (
     <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden">
       
-      <header className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-slate-950/50 backdrop-blur-md z-50 shrink-0">
-        <div className="flex items-center gap-6">
-          <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')} className="hover:bg-white/10 text-white/70">
+      <header className="h-24 border-b border-white/10 flex items-center justify-between px-8 bg-slate-950 z-50 shrink-0">
+        <div className="flex items-center gap-8">
+          <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')} className="hover:bg-white/10 text-white/50 h-12 px-6 font-bold uppercase tracking-widest text-xs">
             <ArrowLeft className="mr-2 h-4 w-4" /> Exit
           </Button>
-          <div className="h-4 w-px bg-white/10" />
-          <h1 className="text-lg font-black tracking-tighter uppercase flex items-center gap-2">
-            <Monitor className="h-5 w-5 text-blue-400" />
+          <div className="h-8 w-px bg-white/10" />
+          <h1 className="text-xl font-black tracking-tighter uppercase flex items-center gap-3">
+            <Monitor className="h-6 w-6 text-blue-400" />
             <span>Presenter HUD</span>
-            {isGoogleConnected ? (
-              <span className="text-xs font-mono bg-green-500/20 text-green-400 px-2 py-0.5 rounded ml-2">GOOGLE CONNECTED</span>
-            ) : (
-              <span className="text-xs font-mono bg-red-500/20 text-red-400 px-2 py-0.5 rounded ml-2">DISCONNECTED</span>
-            )}
           </h1>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-6">
+          <div className="hidden lg:flex items-center gap-4 bg-white/5 px-6 py-3 rounded-2xl border border-white/5">
+            <Avatar className="size-10 border-2 border-blue-500/50">
+              <AvatarImage src={user?.photoURL || undefined} />
+              <AvatarFallback className="bg-blue-600 text-white font-black">
+                {user?.displayName?.[0] || 'G'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Host</span>
+              <span className="text-sm font-bold text-white truncate max-w-[150px]">
+                {user?.displayName || "Guest Presenter"}
+              </span>
+            </div>
+          </div>
+
+          <div className="h-8 w-px bg-white/10" />
+
           {isGoogleConnected ? (
             <Button 
               onClick={handleAISermonGen} 
               disabled={isGenerating}
               variant="outline" 
-              className="border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 h-10 px-4 font-black text-xs tracking-widest"
+              className="border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 h-12 px-6 font-black text-xs tracking-widest rounded-xl"
             >
               {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               AI SERMON GEN
@@ -121,34 +135,30 @@ export default function PresenterDashboard() {
             <Button 
               onClick={handleLogin}
               variant="default"
-              className="bg-primary text-primary-foreground h-10 px-4 font-black text-xs tracking-widest"
+              className="bg-primary text-primary-foreground h-12 px-6 font-black text-xs tracking-widest rounded-xl"
             >
               <LogIn className="mr-2 h-4 w-4" />
-              SIGN IN TO UNLOCK AI
+              CONNECT GOOGLE
             </Button>
           )}
 
-          <div className="hidden md:flex items-center gap-2 text-sm font-mono text-white/40 mr-4">
-            <Clock className="h-4 w-4" /> {currentTime || '--:--:--'}
-          </div>
-          
-          <Button onClick={copyInviteLink} variant="outline" className="border-white/20 hover:bg-white/10 h-10 px-4 font-bold">
+          <Button onClick={copyInviteLink} variant="outline" className="border-white/10 hover:bg-white/5 h-12 px-6 font-bold text-xs tracking-widest rounded-xl">
             {hasCopied ? <Check className="mr-2 h-4 w-4 text-green-400" /> : <Share2 className="mr-2 h-4 w-4" />}
-            {hasCopied ? "COPIED" : "INVITE LINK"}
+            {hasCopied ? "COPIED" : "INVITE"}
           </Button>
 
           <Button 
             onClick={() => window.open(jitsiUrl, '_blank')} 
-            className="bg-blue-600 hover:bg-blue-500 text-white font-black h-10 px-6 shadow-lg shadow-blue-500/20"
+            className="bg-blue-600 hover:bg-blue-500 text-white font-black h-12 px-8 shadow-xl shadow-blue-500/20 rounded-xl"
           >
-            <ExternalLink className="mr-2 h-4 w-4" /> LAUNCH JITSI
+            <ExternalLink className="mr-2 h-4 w-4" /> LAUNCH CALL
           </Button>
         </div>
       </header>
 
       <main className="flex-grow flex overflow-hidden">
         
-        <aside className="w-1/4 min-w-[320px] border-r border-white/5 bg-slate-950/20 flex flex-col overflow-hidden">
+        <aside className="w-1/4 min-w-[350px] border-r border-white/5 bg-slate-900 flex flex-col overflow-hidden">
           <GoogleDriveExplorer onFileSelect={setSelectedFileId} />
         </aside>
 
@@ -156,35 +166,35 @@ export default function PresenterDashboard() {
           {slidesUrl ? (
             <iframe 
               src={slidesUrl}
-              className="w-full h-full border-none shadow-2xl"
+              className="w-full h-full border-none"
               allowFullScreen
             />
           ) : (
-            <div className="flex-grow flex flex-col items-center justify-center text-center p-12 space-y-4">
-              <div className="p-6 bg-slate-900 rounded-full">
-                <Monitor className="size-16 text-white/10" />
+            <div className="flex-grow flex flex-col items-center justify-center text-center p-12 space-y-6">
+              <div className="p-10 bg-slate-900 rounded-[3rem] border border-white/5">
+                <Monitor className="size-24 text-white/5" />
               </div>
-              <h3 className="text-xl font-black text-white/40 uppercase tracking-widest">
-                {isGoogleConnected ? "No Presentation Selected" : "Sign In Required"}
+              <h3 className="text-3xl font-black text-white/20 uppercase tracking-widest">
+                {isGoogleConnected ? "Waiting for Selection" : "Connection Required"}
               </h3>
-              <p className="text-sm text-white/20 max-w-xs italic">
+              <p className="text-lg text-white/10 max-w-sm italic">
                 {isGoogleConnected 
-                  ? "Select a file from your Google Drive on the left or use AI to generate a new sermon presentation."
-                  : "Please connect your Google account to access your slides and AI sermon generation features."}
+                  ? "Select a presentation from your Drive to begin the HUD broadcast."
+                  : "Sign in to synchronize your Google Slides and unlock AI-powered features."}
               </p>
               {!isGoogleConnected && (
-                <Button onClick={handleLogin} variant="outline" className="mt-4 border-white/20 text-white/60 hover:text-white">
-                  Connect Workspace
+                <Button onClick={handleLogin} variant="outline" className="h-14 px-10 border-white/10 text-white/50 hover:text-white rounded-2xl">
+                  Log in to Workspace
                 </Button>
               )}
             </div>
           )}
         </section>
 
-        <aside className="w-1/4 min-w-[320px] bg-slate-950 flex flex-col overflow-hidden relative">
-          <div className="p-5 border-b border-white/5 bg-slate-900/50 flex items-center justify-between">
-            <h2 className="text-xs font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
-              <BookOpen className="h-4 w-4" /> Scripture Engine
+        <aside className="w-1/4 min-w-[350px] bg-slate-950 flex flex-col overflow-hidden relative">
+          <div className="p-6 border-b border-white/5 bg-slate-900/50 flex items-center justify-between">
+            <h2 className="text-xs font-black uppercase tracking-widest text-white/30 flex items-center gap-3">
+              <BookOpen className="h-5 w-5 text-blue-400" /> Reference
             </h2>
           </div>
           <div className="flex-grow w-full bg-white h-full">
@@ -192,24 +202,26 @@ export default function PresenterDashboard() {
               src="https://www.biblegateway.com"
               className="w-full h-full border-none"
               scrolling="yes"
-              title="BibleGateway Native UI"
+              title="Bible Reference"
             />
           </div>
         </aside>
 
       </main>
 
-      <footer className="h-10 bg-black border-t border-white/5 flex items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-4 text-[10px] font-mono text-white/20 uppercase tracking-widest">
-          <span className="flex items-center gap-1.5">
-            <div className={`h-1.5 w-1.5 ${isGoogleConnected ? 'bg-green-500' : 'bg-red-500'} rounded-full animate-pulse`} />
-            {isGoogleConnected ? "Google Workspace Synchronized" : "Google Connection Pending"}
+      <footer className="h-12 bg-black border-t border-white/5 flex items-center justify-between px-8 shrink-0">
+        <div className="flex items-center gap-6 text-[11px] font-mono text-white/30 uppercase tracking-widest">
+          <span className="flex items-center gap-2">
+            <div className={`h-2 w-2 ${isGoogleConnected ? 'bg-green-500' : 'bg-red-500'} rounded-full animate-pulse`} />
+            {isGoogleConnected ? "Workspace Synchronized" : "Workspace Pending"}
           </span>
-          <span className="opacity-50">|</span>
-          <span>Room: {roomName}</span>
+          <span className="opacity-30">|</span>
+          <span className="flex items-center gap-2">
+            <Clock className="h-3 w-3" /> {currentTime || '--:--:--'}
+          </span>
         </div>
-        <div className="text-[10px] font-bold text-white/10 uppercase italic">
-          StudyForge Google-Edition v3.0
+        <div className="text-[11px] font-black text-white/10 uppercase italic tracking-widest">
+          StudyForge v3.0 Google-HUD
         </div>
       </footer>
     </div>
