@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useUser, useAuth } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { 
   ArrowLeft, 
@@ -10,21 +11,13 @@ import {
   Share2, 
   ExternalLink, 
   Monitor, 
-  Settings,
   BookOpen,
   Clock,
   Sparkles,
-  Loader2
+  Loader2,
+  LogIn
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Input } from '@/components/ui/input';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
-} from '@/components/ui/dialog';
 import { GoogleDriveExplorer } from '@/components/google-drive-explorer';
 import { generateSermonSlides } from '@/ai/flows/generate-sermon-slides';
 import { createGoogleSlides } from '@/lib/google-api-utils';
@@ -33,11 +26,14 @@ export default function PresenterDashboard() {
   const { sessionId } = useParams();
   const router = useRouter();
   const { toast } = useToast();
+  const { user, isUserLoading } = useUser();
+  const auth = useAuth();
 
   const [hasCopied, setHasCopied] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
 
   useEffect(() => {
     setCurrentTime(new Date().toLocaleTimeString());
@@ -46,6 +42,11 @@ export default function PresenterDashboard() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('google_access_token');
+    setIsGoogleConnected(!!user && !!token);
+  }, [user]);
 
   const slidesUrl = selectedFileId 
     ? `https://docs.google.com/presentation/d/${selectedFileId}/presenter` 
@@ -72,7 +73,6 @@ export default function PresenterDashboard() {
       setIsGenerating(true);
       const data = await generateSermonSlides({ topic: "The Power of Grace" });
       const presentation = await createGoogleSlides(token, data.title);
-      // In a real app, we'd addContent here. For the MVP, we create the file.
       setSelectedFileId(presentation.presentationId);
       toast({ title: "Sermon Created!", description: "Your AI presentation is ready in Google Drive." });
     } catch (err) {
@@ -80,6 +80,10 @@ export default function PresenterDashboard() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleLogin = () => {
+    router.push('/login');
   };
 
   return (
@@ -94,20 +98,35 @@ export default function PresenterDashboard() {
           <h1 className="text-lg font-black tracking-tighter uppercase flex items-center gap-2">
             <Monitor className="h-5 w-5 text-blue-400" />
             <span>Presenter HUD</span>
-            <span className="text-xs font-mono bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded ml-2">GOOGLE CONNECTED</span>
+            {isGoogleConnected ? (
+              <span className="text-xs font-mono bg-green-500/20 text-green-400 px-2 py-0.5 rounded ml-2">GOOGLE CONNECTED</span>
+            ) : (
+              <span className="text-xs font-mono bg-red-500/20 text-red-400 px-2 py-0.5 rounded ml-2">DISCONNECTED</span>
+            )}
           </h1>
         </div>
 
         <div className="flex items-center gap-4">
-          <Button 
-            onClick={handleAISermonGen} 
-            disabled={isGenerating}
-            variant="outline" 
-            className="border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 h-10 px-4 font-black text-xs tracking-widest"
-          >
-            {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-            AI SERMON GEN
-          </Button>
+          {isGoogleConnected ? (
+            <Button 
+              onClick={handleAISermonGen} 
+              disabled={isGenerating}
+              variant="outline" 
+              className="border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 h-10 px-4 font-black text-xs tracking-widest"
+            >
+              {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              AI SERMON GEN
+            </Button>
+          ) : (
+            <Button 
+              onClick={handleLogin}
+              variant="default"
+              className="bg-primary text-primary-foreground h-10 px-4 font-black text-xs tracking-widest"
+            >
+              <LogIn className="mr-2 h-4 w-4" />
+              SIGN IN TO UNLOCK AI
+            </Button>
+          )}
 
           <div className="hidden md:flex items-center gap-2 text-sm font-mono text-white/40 mr-4">
             <Clock className="h-4 w-4" /> {currentTime || '--:--:--'}
@@ -145,8 +164,19 @@ export default function PresenterDashboard() {
               <div className="p-6 bg-slate-900 rounded-full">
                 <Monitor className="size-16 text-white/10" />
               </div>
-              <h3 className="text-xl font-black text-white/40 uppercase tracking-widest">No Presentation Selected</h3>
-              <p className="text-sm text-white/20 max-w-xs italic">Select a file from your Google Drive on the left or use AI to generate a new sermon presentation.</p>
+              <h3 className="text-xl font-black text-white/40 uppercase tracking-widest">
+                {isGoogleConnected ? "No Presentation Selected" : "Sign In Required"}
+              </h3>
+              <p className="text-sm text-white/20 max-w-xs italic">
+                {isGoogleConnected 
+                  ? "Select a file from your Google Drive on the left or use AI to generate a new sermon presentation."
+                  : "Please connect your Google account to access your slides and AI sermon generation features."}
+              </p>
+              {!isGoogleConnected && (
+                <Button onClick={handleLogin} variant="outline" className="mt-4 border-white/20 text-white/60 hover:text-white">
+                  Connect Workspace
+                </Button>
+              )}
             </div>
           )}
         </section>
@@ -172,8 +202,8 @@ export default function PresenterDashboard() {
       <footer className="h-10 bg-black border-t border-white/5 flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-4 text-[10px] font-mono text-white/20 uppercase tracking-widest">
           <span className="flex items-center gap-1.5">
-            <div className="h-1.5 w-1.5 bg-blue-500 rounded-full animate-pulse" />
-            Google Workspace Synchronized
+            <div className={`h-1.5 w-1.5 ${isGoogleConnected ? 'bg-green-500' : 'bg-red-500'} rounded-full animate-pulse`} />
+            {isGoogleConnected ? "Google Workspace Synchronized" : "Google Connection Pending"}
           </span>
           <span className="opacity-50">|</span>
           <span>Room: {roomName}</span>

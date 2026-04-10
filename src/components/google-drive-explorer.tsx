@@ -5,8 +5,9 @@ import { useState, useEffect } from 'react';
 import { fetchGoogleSlides } from '@/lib/google-api-utils';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
-import { FileText, Loader2, RefreshCw, Presentation } from 'lucide-react';
+import { FileText, Loader2, RefreshCw, Presentation, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 interface GoogleFile {
   id: string;
@@ -17,15 +18,19 @@ interface GoogleFile {
 export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: string) => void }) {
   const [files, setFiles] = useState<GoogleFile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasToken, setHasToken] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const loadFiles = async () => {
     const token = localStorage.getItem('google_access_token');
     if (!token) {
+      setHasToken(false);
       setLoading(false);
       return;
     }
 
+    setHasToken(true);
     try {
       setLoading(true);
       const googleFiles = await fetchGoogleSlides(token);
@@ -34,7 +39,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
       toast({
         variant: 'destructive',
         title: 'Drive Sync Failed',
-        description: 'Could not retrieve your Google Slides files.',
+        description: 'Could not retrieve your Google Slides files. Try logging in again.',
       });
     } finally {
       setLoading(false);
@@ -44,6 +49,23 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   useEffect(() => {
     loadFiles();
   }, []);
+
+  if (!hasToken) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-4">
+        <Presentation className="size-12 text-white/10" />
+        <p className="text-[10px] font-bold uppercase tracking-widest text-white/30">Authentication Required</p>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => router.push('/login')}
+          className="border-white/10 hover:bg-white/5 text-white/50"
+        >
+          <LogIn className="mr-2 h-3 w-3" /> Connect Google
+        </Button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

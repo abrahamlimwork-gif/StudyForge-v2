@@ -25,6 +25,7 @@ export default function LoginPage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
 
+  // Provided Client ID: 936282634116-0l3blqtgei3sglo6bop5pbbsfjqd53fu.apps.googleusercontent.com
   const GOOGLE_CLIENT_ID = "936282634116-0l3blqtgei3sglo6bop5pbbsfjqd53fu.apps.googleusercontent.com";
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function LoginPage() {
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
             localStorage.setItem('google_access_token', credential.accessToken);
+            toast({ title: "Google Workspace Connected", description: "Your Drive is now synchronized." });
           }
         }
       } catch (err: any) {
@@ -48,7 +50,7 @@ export default function LoginPage() {
     };
 
     checkRedirect();
-  }, [auth]);
+  }, [auth, toast]);
 
   useEffect(() => {
     if (!isUserLoading && user && !isCheckingRedirect) {
