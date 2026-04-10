@@ -1,7 +1,8 @@
-
 'use server';
 /**
  * @fileOverview A Genkit flow to generate structured sermon slides.
+ * 
+ * - generateSermonSlides - A function that handles the generation of sermon slides.
  */
 
 import { ai } from '@/ai/genkit';
@@ -22,6 +23,7 @@ const GenerateSermonSlidesOutputSchema = z.object({
 
 const prompt = ai.definePrompt({
   name: 'generateSermonSlidesPrompt',
+  model: 'googleai/gemini-1.5-flash',
   input: { schema: GenerateSermonSlidesInputSchema },
   output: { schema: GenerateSermonSlidesOutputSchema },
   prompt: `You are an AI sermon assistant. Generate a professional outline for a church presentation.

@@ -42,6 +42,7 @@ export type GenerateLessonPromptsOutput = z.infer<
 
 const prompt = ai.definePrompt({
   name: 'generateLessonPromptsPrompt',
+  model: 'googleai/gemini-1.5-flash',
   input: {schema: GenerateLessonPromptsInputSchema},
   output: {schema: GenerateLessonPromptsOutputSchema},
   prompt: `You are an AI assistant specialized in generating thought-provoking discussion prompts for educational and spiritual lessons.

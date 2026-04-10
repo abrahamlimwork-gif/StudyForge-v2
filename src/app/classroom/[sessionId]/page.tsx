@@ -101,6 +101,8 @@ export default function PresenterDashboard() {
       let errorMessage = "Failed to sync slides to Drive.";
       if (err.message?.includes('503') || err.message?.includes('high demand')) {
         errorMessage = "AI is currently very busy. Please wait a moment and try again.";
+      } else if (err.message?.includes('404')) {
+        errorMessage = "The AI model is temporarily unavailable. Please try again shortly.";
       }
 
       toast({ 
