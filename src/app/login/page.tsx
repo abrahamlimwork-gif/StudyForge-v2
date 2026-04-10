@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -31,29 +32,52 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     if (!auth) return;
+    
+    // Clear existing auth state to prevent conflicts
+    localStorage.removeItem('google_access_token');
     setError(null);
     setIsLoggingIn(true);
+    
+    console.log("Initiating Google Login with targeted scopes...");
+
     try {
       const provider = new GoogleAuthProvider();
-      // Added drive.metadata.readonly for slide discovery
+      
+      // Strict scope verification as requested
       provider.addScope('https://www.googleapis.com/auth/drive.file');
-      provider.addScope('https://www.googleapis.com/auth/drive.metadata.readonly');
       provider.addScope('https://www.googleapis.com/auth/presentations');
+      
+      // Custom parameters to ensure the right account selection
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
       
       await setPersistence(auth, browserLocalPersistence);
       const result = await signInWithPopup(auth, provider);
       
+      console.log("Auth Popup Success:", result.user.email);
+      
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         localStorage.setItem('google_access_token', credential.accessToken);
+        console.log("Access Token Captured successfully.");
         toast({ 
           title: "Successfully Connected", 
           description: `Welcome, ${result.user.displayName}! Workspace services are now active.` 
         });
+      } else {
+        console.warn("No access token returned in the credential result.");
       }
       
       router.push('/dashboard');
     } catch (err: any) {
+      console.error("Google Auth Error Details:", {
+        code: err.code,
+        message: err.message,
+        customData: err.customData,
+        email: err.customData?.email
+      });
+      
       setError(err.message);
       toast({
         variant: 'destructive',
@@ -131,7 +155,9 @@ export default function LoginPage() {
               <Alert variant="destructive" className="border-red-500/50 bg-red-500/10 text-red-400">
                 <InfoIcon className="size-6" />
                 <AlertTitle className="text-xl font-black uppercase">Auth Error</AlertTitle>
-                <AlertDescription className="text-lg">{error}</AlertDescription>
+                <AlertDescription className="text-lg font-mono text-[10px] break-all">
+                  {error}
+                </AlertDescription>
               </Alert>
             )}
 

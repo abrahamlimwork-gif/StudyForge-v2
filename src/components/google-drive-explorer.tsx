@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { fetchGoogleSlides } from '@/lib/google-api-utils';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
-import { FileText, Loader2, RefreshCw, Presentation, ShieldCheck, ExternalLink, AlertCircle } from 'lucide-react';
+import { FileText, Loader2, RefreshCw, Presentation, ShieldCheck, ExternalLink, AlertCircle, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
@@ -27,6 +27,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   const loadFiles = async (token?: string) => {
     const accessToken = token || localStorage.getItem('google_access_token');
     if (!accessToken) {
+      console.log("No access token found in localStorage.");
       setHasToken(false);
       return;
     }
@@ -36,6 +37,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     setIsApiDisabled(false);
     
     try {
+      console.log("Fetching Google Slides with token...");
       const googleFiles = await fetchGoogleSlides(accessToken);
       setFiles(googleFiles);
     } catch (error: any) {
@@ -43,7 +45,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
       
       const errorMessage = error.message || '';
       
-      // Handle the specific "API Disabled" error (403 SERVICE_DISABLED)
       if (errorMessage.includes('403') && (errorMessage.includes('SERVICE_DISABLED') || errorMessage.includes('API has not been used'))) {
         setIsApiDisabled(true);
         toast({
@@ -54,8 +55,8 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         return;
       }
 
-      // Handle standard auth errors (401/403)
       if (errorMessage.includes('401') || errorMessage.includes('403')) {
+        console.warn("Unauthorized or Forbidden response. Clearing token.");
         setHasToken(false);
         localStorage.removeItem('google_access_token');
       }
@@ -72,18 +73,28 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
   const handleConnect = async () => {
     if (!auth) return;
+    
+    // Clear state before connecting
+    localStorage.removeItem('google_access_token');
     setLoading(true);
+    
+    console.log("Reconnecting Google Drive...");
+    
     try {
       const provider = new GoogleAuthProvider();
-      // Verified Scopes for Audit
+      // Use minimal scopes as requested for verification
       provider.addScope('https://www.googleapis.com/auth/drive.file');
-      provider.addScope('https://www.googleapis.com/auth/drive.metadata.readonly');
       provider.addScope('https://www.googleapis.com/auth/presentations');
+      
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
       
       const result = await signInWithPopup(auth, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       
       if (credential?.accessToken) {
+        console.log("New Access Token acquired.");
         localStorage.setItem('google_access_token', credential.accessToken);
         setHasToken(true);
         toast({ 
@@ -93,6 +104,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         await loadFiles(credential.accessToken);
       }
     } catch (err: any) {
+      console.error("Popup Connect Error:", err);
       toast({
         variant: 'destructive',
         title: 'Connection Failed',
@@ -116,7 +128,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         <div className="space-y-4">
           <p className="text-xs font-black uppercase tracking-[0.2em] text-red-400">API Access Required</p>
           <p className="text-sm text-white/40 italic leading-relaxed">
-            The Google Drive API is not enabled for this project. Please enable it in your Google Cloud Console to browse your slides.
+            The Google Drive API is not enabled for this project. Please enable it in your Google Cloud Console.
           </p>
           <Button 
             variant="outline" 
@@ -128,10 +140,10 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           </Button>
           <Button 
             variant="ghost" 
-            onClick={() => loadFiles()}
-            className="text-[10px] uppercase font-black tracking-widest text-white/20 hover:text-white"
+            onClick={() => handleConnect()}
+            className="w-full h-12 text-[10px] uppercase font-black tracking-widest text-blue-400 hover:text-blue-300"
           >
-            Try Again
+            <RefreshCw className="mr-2 h-3 w-3" /> Reconnect Now
           </Button>
         </div>
       </div>
@@ -154,8 +166,8 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           disabled={loading}
           className="w-full h-14 border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 font-black text-xs tracking-widest uppercase rounded-2xl transition-all"
         >
-          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-          Connect Google Drive
+          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
+          Reconnect Google
         </Button>
       </div>
     );
@@ -192,6 +204,13 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
             <div className="text-center p-12 border-2 border-dashed border-white/5 rounded-3xl opacity-30">
               <p className="text-[10px] font-black uppercase tracking-widest">No Slides Found</p>
               <p className="text-[9px] mt-1">Files will appear here once you create them.</p>
+              <Button 
+                variant="ghost" 
+                onClick={handleConnect}
+                className="mt-4 text-[9px] uppercase font-black tracking-[0.2em] text-blue-400"
+              >
+                Refresh Connection
+              </Button>
             </div>
           ) : (
             files.map((file) => (
@@ -221,8 +240,10 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         <Button 
           variant="ghost" 
           onClick={() => {
+            console.log("Disconnecting account...");
             localStorage.removeItem('google_access_token');
             setHasToken(false);
+            setFiles([]);
           }}
           className="w-full h-10 text-[10px] font-black uppercase tracking-widest text-white/20 hover:text-red-400 hover:bg-red-400/5"
         >
