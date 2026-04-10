@@ -14,21 +14,8 @@ service cloud.firestore {
      * All application data is organized under a user-centric hierarchy:
      * /users/{facilitatorId}/sessions/{sessionId}/...
      *
-     * Key Security Decisions:
-     * 1. Authorization Independence: We use denormalized fields (like facilitatorId) 
-     *    within documents to allow rules to validate ownership and relational 
-     *    integrity without performing expensive get() lookups on parent documents.
-     * 2. Path-Based Ownership: The primary authorization mechanism is matching 
-     *    the 'facilitatorId' in the document path to the 'request.auth.uid'.
-     * 3. Prototyping Flexibility: While authorization (who can access) is strictly 
-     *    enforced, the internal schema of documents (data types, optional fields) 
-     *    is not validated to allow for rapid iteration during development.
-     *
-     * Denormalization for Authorization:
-     * - Sessions: Include 'facilitatorId' to match the path parameter.
-     * - LessonPrompts: Include 'facilitatorId' (from the parent session) and 
-     *   'generatedByUserId' to allow for multi-user context if needed, 
-     *   though currently restricted to the facilitator's path.
+     * Demo Mode:
+     * Includes a top-level 'public_sessions' collection for shared testing environments.
      */
 
     // --- Helper Functions ---
@@ -51,12 +38,18 @@ service cloud.firestore {
     // --- Collection Rules ---
 
     /**
+     * @description Rules for Public Sessions (Demo/Testing).
+     * @path /public_sessions/{sessionId}
+     */
+    match /public_sessions/{sessionId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if false; // Restricted for safety
+    }
+
+    /**
      * @description Rules for Session documents, owned by a facilitator.
      * @path /users/{facilitatorId}/sessions/{sessionId}
-     * @allow (get) If the user is the facilitator in the path.
-     * @allow (create) If the user is the facilitator and data.facilitatorId matches.
-     * @deny (update) If the user attempts to change the facilitatorId ownership.
-     * @principle Enforces path-based ownership and validates relational integrity.
      */
     match /users/{facilitatorId}/sessions/{sessionId} {
       allow get, list: if isOwner(facilitatorId);
@@ -71,11 +64,6 @@ service cloud.firestore {
 
       /**
        * @description Rules for AI-generated LessonPrompts within a session.
-       * @path /users/{facilitatorId}/sessions/{sessionId}/lessonPrompts/{lessonPromptId}
-       * @allow (list) If the user is the session facilitator.
-       * @allow (create) If the user is the facilitator and relational fields match.
-       * @deny (create) If the provided facilitatorId in data does not match the path.
-       * @principle Uses denormalized facilitatorId to ensure authorization independence.
        */
       match /lessonPrompts/{lessonPromptId} {
         allow get, list: if isOwner(facilitatorId);
@@ -93,7 +81,6 @@ service cloud.firestore {
     }
 
     // --- Global Deny-All ---
-    // Explicitly deny access to any path not defined above.
     match /{document=**} {
       allow read, write: if false;
     }
