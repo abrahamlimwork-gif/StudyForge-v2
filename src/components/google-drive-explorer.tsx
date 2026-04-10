@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -35,10 +34,18 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     try {
       const googleFiles = await fetchGoogleSlides(accessToken);
       setFiles(googleFiles);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Drive fetch error:', error);
-      setHasToken(false);
-      localStorage.removeItem('google_access_token');
+      // Only clear token if it's explicitly an auth error (401/403)
+      if (error.message.includes('401') || error.message.includes('403')) {
+        setHasToken(false);
+        localStorage.removeItem('google_access_token');
+      }
+      toast({
+        variant: 'destructive',
+        title: 'Library Sync Failed',
+        description: 'Could not retrieve slides. Please reconnect your account.',
+      });
     } finally {
       setLoading(false);
     }
@@ -50,7 +57,9 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     try {
       const provider = new GoogleAuthProvider();
       // Required scopes for StudyForge AI and presentation HUD
+      // Added drive.metadata.readonly to allow listing existing files not created by this app
       provider.addScope('https://www.googleapis.com/auth/drive.file');
+      provider.addScope('https://www.googleapis.com/auth/drive.metadata.readonly');
       provider.addScope('https://www.googleapis.com/auth/presentations');
       
       const result = await signInWithPopup(auth, provider);

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -24,9 +23,6 @@ export default function LoginPage() {
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
 
-  // Provided Client ID: 936282634116-0l3blqtgei3sglo6bop5pbbsfjqd53fu.apps.googleusercontent.com
-  // Note: This ID is used by Firebase Auth in the background once configured in the console.
-
   useEffect(() => {
     if (!isUserLoading && user) {
       router.replace('/dashboard');
@@ -39,7 +35,9 @@ export default function LoginPage() {
     setIsLoggingIn(true);
     try {
       const provider = new GoogleAuthProvider();
+      // Added drive.metadata.readonly for slide discovery
       provider.addScope('https://www.googleapis.com/auth/drive.file');
+      provider.addScope('https://www.googleapis.com/auth/drive.metadata.readonly');
       provider.addScope('https://www.googleapis.com/auth/presentations');
       
       await setPersistence(auth, browserLocalPersistence);
