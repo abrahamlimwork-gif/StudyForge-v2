@@ -1,31 +1,23 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useUser } from '@/firebase';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Copy, Check, Loader2, BookText, Share2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, BookText, Share2, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function ClassroomPage() {
   const { sessionId } = useParams();
-  const { user, isUserLoading } = useUser();
   const router = useRouter();
   const { toast } = useToast();
   
   const [isIframeLoaded, setIsIframeLoaded] = useState(false);
   const [hasCopied, setHasCopied] = useState(false);
 
-  useEffect(() => {
-    if (!isUserLoading && !user) {
-      router.push('/login');
-    }
-  }, [user, isUserLoading, router]);
-
-  const roomName = typeof sessionId === 'string' ? sessionId : 'DefaultSession';
+  const roomName = typeof sessionId === 'string' ? sessionId : 'TestSession';
   const jitsiUrl = `https://meet.jit.si/${roomName}`;
 
   const copyInviteLink = () => {
@@ -38,8 +30,6 @@ export default function ClassroomPage() {
     setTimeout(() => setHasCopied(false), 2000);
   };
 
-  if (isUserLoading || !user) return null;
-
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       <Navbar />
@@ -51,14 +41,14 @@ export default function ClassroomPage() {
             variant="destructive" 
             size="lg" 
             className="text-xl h-14 px-6 font-bold shadow-sm"
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/')}
           >
             <ArrowLeft className="mr-2 size-5" />
-            Exit Class
+            End Test
           </Button>
           <div className="hidden lg:flex items-center gap-3 px-4 py-2 bg-green-50 border border-green-200 rounded-lg text-green-700 font-bold">
             <ShieldCheck className="size-5" />
-            <span>Public Secure Room</span>
+            <span>Public Test Room</span>
           </div>
         </div>
 

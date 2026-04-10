@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useUser, useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
+import { useState } from 'react';
+import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
 import { collection, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
-import { Plus, Video, Calendar, BookOpen, Sparkles, Loader2 } from 'lucide-react';
+import { Plus, Video, Calendar, BookOpen, Loader2 } from 'lucide-react';
 import { LessonPrompts } from '@/components/lesson-prompts';
 import { generateRandomRoomName } from '@/lib/room-utils';
 
@@ -23,33 +23,25 @@ interface Session {
 }
 
 export default function DashboardPage() {
-  const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const router = useRouter();
   
   const [newTopic, setNewTopic] = useState('');
 
-  // 1. Auth Guard with Replace to prevent back-button loops
-  useEffect(() => {
-    if (!isUserLoading && !user) {
-      console.log('Dashboard: No user detected, replacing with /login');
-      router.replace('/login');
-    }
-  }, [user, isUserLoading, router]);
-
   const sessionsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
+    if (!db) return null;
+    // Removing user-specific filter for auth-free testing
     return query(
-      collection(db, 'users', user.uid, 'sessions'), 
+      collection(db, 'public_sessions'), 
       orderBy('createdAt', 'desc')
     );
-  }, [db, user]);
+  }, [db]);
 
   const { data: sessions, isLoading: isSessionsLoading } = useCollection<Session>(sessionsQuery);
 
   const handleCreateSession = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTopic || !user || !db) return;
+    if (!newTopic || !db) return;
 
     const randomizedRoom = generateRandomRoomName();
     const sessionData = {
@@ -57,34 +49,24 @@ export default function DashboardPage() {
       description: `Session about ${newTopic}`,
       jitsiRoomName: randomizedRoom,
       scheduledStartTime: new Date().toISOString(),
-      facilitatorId: user.uid,
+      facilitatorId: 'guest-teacher',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
-    const sessionsRef = collection(db, 'users', user.uid, 'sessions');
+    const sessionsRef = collection(db, 'public_sessions');
     addDocumentNonBlocking(sessionsRef, sessionData);
 
     setNewTopic('');
   };
-
-  // Show global loader while auth is resolving
-  if (isUserLoading || !user) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-6">
-        <Loader2 className="size-16 animate-spin text-primary" />
-        <h1 className="text-4xl font-headline font-bold">Loading Dashboard...</h1>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="max-w-7xl mx-auto py-12 px-6">
         <header className="mb-12 space-y-4">
-          <h1 className="text-6xl font-headline font-black text-primary tracking-tight uppercase">Teacher Dashboard</h1>
-          <p className="text-2xl text-muted-foreground font-medium italic">Welcome back, {user.displayName || user.email}.</p>
+          <h1 className="text-6xl font-headline font-black text-primary tracking-tight uppercase">Public Dashboard</h1>
+          <p className="text-2xl text-muted-foreground font-medium italic">Guest Access Mode enabled.</p>
         </header>
 
         <div className="grid lg:grid-cols-3 gap-12">
@@ -128,14 +110,14 @@ export default function DashboardPage() {
             {isSessionsLoading ? (
               <div className="flex items-center gap-4 p-8 bg-slate-50 rounded-2xl border-2 border-dashed">
                 <Loader2 className="size-8 animate-spin text-primary" />
-                <span className="text-2xl font-bold text-slate-500">Retrieving your classroom records...</span>
+                <span className="text-2xl font-bold text-slate-500">Retrieving records...</span>
               </div>
             ) : !sessions || sessions.length === 0 ? (
               <Card className="border-dashed border-4 p-16 text-center bg-slate-50 rounded-3xl">
                 <CardContent className="space-y-4">
                   <BookOpen className="size-24 mx-auto text-muted mb-4 opacity-30" />
-                  <p className="text-3xl font-bold text-muted-foreground">Your classroom is empty.</p>
-                  <p className="text-xl text-muted-foreground">Create your first teaching session to begin.</p>
+                  <p className="text-3xl font-bold text-muted-foreground">No public sessions found.</p>
+                  <p className="text-xl text-muted-foreground">Create one to see it here.</p>
                 </CardContent>
               </Card>
             ) : (
