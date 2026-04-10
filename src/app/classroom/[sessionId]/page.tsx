@@ -98,9 +98,11 @@ export default function PresenterDashboard() {
   }, [selectedFileId, isGoogleConnected]);
 
   // Sync the iframe URL with the current slide index
+  // Removed delayms=3000 to fix the navigation delay
+  // Added rm=minimal to hide Google UI and force HUD control for sync
   const slidesUrl = useMemo(() => {
     if (!selectedFileId) return null;
-    return `https://docs.google.com/presentation/d/${selectedFileId}/embed?start=false&loop=false&delayms=3000&slide=id.p${currentSlideIndex + 1}`;
+    return `https://docs.google.com/presentation/d/${selectedFileId}/embed?rm=minimal&slide=id.p${currentSlideIndex + 1}`;
   }, [selectedFileId, currentSlideIndex]);
 
   const roomName = typeof sessionId === 'string' ? sessionId : 'TestSession';
@@ -264,30 +266,30 @@ export default function PresenterDashboard() {
                 </Button>
               </div>
               
-              <div className="flex-grow relative">
+              <div className="flex-grow relative bg-slate-950 flex items-center justify-center">
                 <iframe 
                   src={slidesUrl}
-                  className="w-full h-full border-none"
+                  className="w-full h-full border-none shadow-2xl"
                   allowFullScreen
                 />
 
                 {/* Navigation Overlays */}
-                <div className="absolute inset-y-0 left-0 w-24 flex items-center justify-center group">
+                <div className="absolute inset-y-0 left-0 w-24 flex items-center justify-center group z-40">
                   <Button 
                     variant="ghost" 
                     onClick={goToPrevSlide}
                     disabled={currentSlideIndex === 0}
-                    className="size-16 rounded-full bg-black/20 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity text-white hover:bg-black/40"
+                    className="size-16 rounded-full bg-black/40 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity text-white hover:bg-black/60 border border-white/10"
                   >
                     <ChevronLeft className="size-10" />
                   </Button>
                 </div>
-                <div className="absolute inset-y-0 right-0 w-24 flex items-center justify-center group">
+                <div className="absolute inset-y-0 right-0 w-24 flex items-center justify-center group z-40">
                   <Button 
                     variant="ghost" 
                     onClick={goToNextSlide}
                     disabled={currentSlideIndex >= speakerNotes.length - 1}
-                    className="size-16 rounded-full bg-black/20 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity text-white hover:bg-black/40"
+                    className="size-16 rounded-full bg-black/40 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity text-white hover:bg-black/60 border border-white/10"
                   >
                     <ChevronRight className="size-10" />
                   </Button>
@@ -314,7 +316,7 @@ export default function PresenterDashboard() {
 
                 <Button 
                   onClick={goToNextSlide}
-                  disabled={currentSlideIndex >= speakerNotes.length - 1}
+                  disabled={currentSlideIndex >= (speakerNotes.length || 1) - 1}
                   className="h-14 px-12 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-xl shadow-blue-500/20"
                 >
                   NEXT SLIDE <ChevronRight className="ml-2 h-5 w-5" />
@@ -324,9 +326,9 @@ export default function PresenterDashboard() {
               <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-[60] w-full max-w-sm">
                 <Alert className="bg-black/80 backdrop-blur-xl border-blue-500/20 text-white rounded-2xl shadow-2xl">
                   <Gamepad2 className="h-4 w-4 text-blue-400" />
-                  <AlertTitle className="text-[10px] font-black uppercase tracking-widest text-blue-400">Sync Active</AlertTitle>
+                  <AlertTitle className="text-[10px] font-black uppercase tracking-widest text-blue-400">HUD Sync Enabled</AlertTitle>
                   <AlertDescription className="text-[9px] font-bold text-white/60">
-                    HUD controls keep notes and slides perfectly aligned.
+                    Use HUD buttons for instant slide & note synchronization.
                   </AlertDescription>
                 </Alert>
               </div>
