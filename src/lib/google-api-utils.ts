@@ -1,4 +1,3 @@
-
 /**
  * Utility functions for interacting with Google Drive and Slides APIs.
  * Includes enhanced logging for audit purposes.
@@ -22,11 +21,9 @@ export async function fetchGoogleSlides(accessToken: string) {
 
   if (!response.ok) {
     const errorBody = await response.text();
-    console.error("Drive API Error Response:", {
-      status: response.status,
-      statusText: response.statusText,
-      body: errorBody
-    });
+    console.error("Drive API Error Status:", response.status);
+    console.error("Drive API Error Text:", response.statusText);
+    console.error("Drive API Error Body:", errorBody);
     throw new Error(`Failed to fetch Google Slides: ${response.status} ${response.statusText} - ${errorBody}`);
   }
 
