@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -15,6 +16,7 @@ import {
   Sparkles,
   Loader2,
   AlertTriangle,
+  Maximize2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleDriveExplorer } from '@/components/google-drive-explorer';
@@ -78,21 +80,16 @@ export default function PresenterDashboard() {
       setIsGenerating(true);
       toast({ title: "Thinking...", description: "AI is outlining your sermon now." });
       
-      // 1. Generate Content
       const data = await generateSermonSlides({ 
         topic: "The Power of Grace", 
         scripture: "Ephesians 2:8" 
       });
       
-      // 2. Create Presentation
       const presentation = await createGoogleSlides(token, `AI Sermon: ${data.title}`);
-      
-      // 3. Populate Content
       await addSlidesContent(token, presentation.presentationId, data.slides);
       
-      // 4. Update UI
       setSelectedFileId(presentation.presentationId);
-      setRefreshKey(prev => prev + 1); // Refresh library list
+      setRefreshKey(prev => prev + 1);
       
       toast({ title: "Sermon Ready!", description: "AI presentation created and saved to your Drive." });
     } catch (err: any) {
@@ -176,11 +173,38 @@ export default function PresenterDashboard() {
 
         <section className="flex-grow border-r border-white/5 bg-black flex flex-col relative overflow-hidden">
           {slidesUrl ? (
-            <iframe 
-              src={slidesUrl}
-              className="w-full h-full border-none"
-              allowFullScreen
-            />
+            <>
+              <div className="absolute top-6 right-6 z-[60] flex gap-3">
+                <Button 
+                  onClick={() => window.open(`https://docs.google.com/presentation/d/${selectedFileId}/presenter`, '_blank')}
+                  variant="secondary"
+                  className="bg-blue-600/90 hover:bg-blue-600 text-white font-black border-none h-12 px-6 rounded-xl shadow-2xl"
+                >
+                  <Maximize2 className="mr-2 h-4 w-4" /> FULLSCREEN
+                </Button>
+                <Button 
+                  onClick={() => window.open(`https://docs.google.com/presentation/d/${selectedFileId}/edit`, '_blank')}
+                  variant="secondary"
+                  className="bg-slate-800/90 hover:bg-slate-800 text-white border-white/10 h-12 px-6 rounded-xl"
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" /> OPEN IN DRIVE
+                </Button>
+              </div>
+              <iframe 
+                src={slidesUrl}
+                className="w-full h-full border-none"
+                allowFullScreen
+                allow="clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              />
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-black/60 backdrop-blur-md border border-white/10 px-6 py-3 rounded-full flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="size-4 text-amber-400" />
+                  <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">
+                    Seeing an error? Use the 'Fullscreen' button above.
+                  </p>
+                </div>
+              </div>
+            </>
           ) : (
             <div className="flex-grow flex flex-col items-center justify-center text-center p-12 space-y-8">
               <div className="p-10 bg-slate-900 rounded-[3rem] border border-white/5">
