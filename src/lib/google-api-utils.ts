@@ -4,15 +4,12 @@
  */
 
 export async function fetchGoogleSlides(accessToken: string) {
-  // Query only for presentations created by this app (drive.file) 
-  // OR broad discovery if user authorized drive.metadata.readonly
+  // Query only for presentations created by this app (drive.file)
   const query = encodeURIComponent("mimeType='application/vnd.google-apps.presentation'");
   const fields = encodeURIComponent("files(id, name, modifiedTime, thumbnailLink)");
   
   const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${fields}`;
   
-  console.log("Fetching Drive API URL:", url);
-
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -21,11 +18,13 @@ export async function fetchGoogleSlides(accessToken: string) {
 
   if (!response.ok) {
     const errorBody = await response.text();
-    console.error("Drive API Error Status:", response.status);
-    console.error("Drive API Error Text:", response.statusText);
-    console.error("Drive API Error Body:", errorBody);
+    console.error("Drive API Error Detail:", {
+      status: response.status,
+      text: response.statusText,
+      body: errorBody
+    });
     
-    // We throw a structured error so the UI can catch and handle it specifically
+    // Create a structured error object for the UI to consume
     const error: any = new Error(`Drive API Error: ${response.status}`);
     error.status = response.status;
     error.body = errorBody;
@@ -33,13 +32,10 @@ export async function fetchGoogleSlides(accessToken: string) {
   }
 
   const data = await response.json();
-  console.log("Drive API Success. Items found:", data.files?.length || 0);
   return data.files || [];
 }
 
 export async function createGoogleSlides(accessToken: string, title: string) {
-  console.log("Creating new Google Slides presentation with title:", title);
-  
   const response = await fetch('https://www.googleapis.com/slides/v1/presentations', {
     method: 'POST',
     headers: {
@@ -53,18 +49,13 @@ export async function createGoogleSlides(accessToken: string, title: string) {
 
   if (!response.ok) {
     const errorBody = await response.text();
-    console.error("Slides API Create Error:", errorBody);
     throw new Error(`Failed to create Google Slides: ${response.status} - ${errorBody}`);
   }
 
-  const presentation = await response.json();
-  console.log("Presentation created successfully with ID:", presentation.presentationId);
-  return presentation;
+  return await response.json();
 }
 
 export async function addSlidesContent(accessToken: string, presentationId: string, slides: { title: string; content: string }[]) {
-  console.log(`Adding ${slides.length} slides to presentation ${presentationId}`);
-  
   const requests = slides.flatMap((slide, index) => {
     const slideId = `slide_${index}`;
     return [
@@ -101,7 +92,6 @@ export async function addSlidesContent(accessToken: string, presentationId: stri
 
   if (!response.ok) {
     const errorBody = await response.text();
-    console.error("Slides API Update Error:", errorBody);
     throw new Error(`Failed to update presentation content: ${response.status} - ${errorBody}`);
   }
 

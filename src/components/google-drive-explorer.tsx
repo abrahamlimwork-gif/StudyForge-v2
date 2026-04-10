@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { fetchGoogleSlides } from '@/lib/google-api-utils';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
-import { FileText, Loader2, RefreshCw, Presentation, ShieldCheck, ExternalLink, AlertCircle, LogIn, Lock } from 'lucide-react';
+import { FileText, Loader2, RefreshCw, Presentation, ShieldCheck, ExternalLink, AlertCircle, Lock, Bug } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
@@ -19,7 +19,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   const [files, setFiles] = useState<GoogleFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasToken, setHasToken] = useState(false);
-  const [isApiDisabled, setIsApiDisabled] = useState(false);
+  const [apiError, setApiError] = useState<{ status: number; body: string } | null>(null);
   const { toast } = useToast();
   const auth = useAuth();
 
@@ -32,32 +32,21 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
     setHasToken(true);
     setLoading(true);
-    setIsApiDisabled(false);
+    setApiError(null);
     
     try {
       const googleFiles = await fetchGoogleSlides(accessToken);
       setFiles(googleFiles);
     } catch (error: any) {
       console.error('Explorer Sync Error:', error);
-      
-      const status = error.status;
-      const body = error.body || '';
-      
-      // Check for project configuration errors (403 Service Disabled)
-      if (status === 403 && (body.includes('SERVICE_DISABLED') || body.includes('API has not been used'))) {
-        setIsApiDisabled(true);
-        return;
-      }
+      setApiError({
+        status: error.status || 500,
+        body: error.body || error.message
+      });
 
-      // Handle token expiration
-      if (status === 401 || status === 403) {
+      if (error.status === 401) {
         setHasToken(false);
         localStorage.removeItem('google_access_token');
-        toast({
-          variant: 'destructive',
-          title: 'Session Expired',
-          description: 'Please reconnect your Google account.',
-        });
       }
     } finally {
       setLoading(false);
@@ -72,6 +61,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     
     try {
       const provider = new GoogleAuthProvider();
+      // Strictly using only the requested scopes for stability
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.addScope('https://www.googleapis.com/auth/presentations');
       
@@ -104,32 +94,56 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     loadFiles();
   }, []);
 
-  if (isApiDisabled) {
+  // Display Troubleshooting view if there's a 403 or other API error
+  if (apiError) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-6 bg-slate-900">
-        <div className="p-6 bg-amber-500/10 rounded-full border border-amber-500/20">
-          <AlertCircle className="size-12 text-amber-400" />
-        </div>
-        <div className="space-y-4">
-          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">Drive API Disabled</h3>
-          <p className="text-xs text-white/40 italic leading-relaxed">
-            The Google Drive API must be enabled in your Google Cloud Console for project <span className="text-amber-400">210492515699</span>.
-          </p>
-          <Button 
-            variant="outline" 
-            onClick={() => window.open('https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=210492515699', '_blank')}
-            className="w-full h-12 border-white/10 hover:bg-white/5 text-white/80 font-bold text-[10px] uppercase tracking-widest rounded-xl"
-          >
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Enable API Now
-          </Button>
-          <Button 
-            variant="ghost" 
-            onClick={() => loadFiles()}
-            className="w-full h-10 text-[9px] uppercase font-black tracking-widest text-blue-400 hover:text-blue-300"
-          >
-            <RefreshCw className="mr-2 h-3 w-3" /> Check Status Again
-          </Button>
+      <div className="flex flex-col h-full bg-slate-900 p-6 overflow-hidden">
+        <div className="flex-grow flex flex-col items-center justify-center text-center space-y-6">
+          <div className="p-4 bg-red-500/10 rounded-full border border-red-500/20">
+            <AlertCircle className="size-12 text-red-400" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-sm font-black uppercase tracking-widest text-white">Sync Failed ({apiError.status})</h3>
+            <p className="text-[10px] text-white/40 italic leading-relaxed">
+              Google reported a permission or configuration issue.
+            </p>
+          </div>
+
+          <div className="w-full bg-black/40 p-4 rounded-xl border border-white/5 text-left font-mono text-[9px] text-red-300 overflow-auto max-h-[200px]">
+            <div className="flex items-center gap-2 mb-2 text-white/40 font-black uppercase text-[8px]">
+              <Bug className="h-3 w-3" /> Raw API Response
+            </div>
+            {apiError.body}
+          </div>
+
+          <div className="w-full space-y-3 pt-4">
+            <Button 
+              onClick={() => window.open('https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=210492515699', '_blank')}
+              className="w-full h-12 border border-white/10 hover:bg-white/5 text-white/80 font-bold text-[10px] uppercase tracking-widest rounded-xl"
+            >
+              <ExternalLink className="mr-2 h-4 w-4" /> Verify Cloud Setup
+            </Button>
+            
+            <Button 
+              variant="ghost" 
+              onClick={() => loadFiles()}
+              className="w-full h-10 text-[9px] uppercase font-black tracking-widest text-blue-400"
+            >
+              <RefreshCw className="mr-2 h-3 w-3" /> Retry Sync
+            </Button>
+
+            <Button 
+              variant="ghost" 
+              onClick={() => {
+                localStorage.removeItem('google_access_token');
+                setApiError(null);
+                setHasToken(false);
+              }}
+              className="w-full h-10 text-[9px] uppercase font-black tracking-widest text-white/10 hover:text-white/30"
+            >
+              Reset Session
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -143,7 +157,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         </div>
         <div className="space-y-4">
           <h3 className="text-xl font-black uppercase tracking-tighter text-white">Library Locked</h3>
-          <p className="text-sm text-white/30 italic">Connect your Workspace to access your sermon slides and media.</p>
+          <p className="text-sm text-white/30 italic">Connect your Workspace to access your sermon slides.</p>
         </div>
         <Button 
           onClick={handleConnect}
@@ -187,7 +201,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           {files.length === 0 ? (
             <div className="text-center p-12 border-2 border-dashed border-white/5 rounded-3xl opacity-20">
               <p className="text-[10px] font-black uppercase tracking-widest">No Slides Found</p>
-              <p className="text-[9px] mt-1 italic">Create a sermon via AI or upload to Drive.</p>
+              <p className="text-[9px] mt-1 italic">Use 'drive.file' scope: Only files created here appear.</p>
             </div>
           ) : (
             files.map((file) => (
@@ -220,6 +234,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
             localStorage.removeItem('google_access_token');
             setHasToken(false);
             setFiles([]);
+            setApiError(null);
             toast({ title: "Account Unlinked", description: "Google session has been cleared." });
           }}
           className="w-full h-10 text-[9px] font-black uppercase tracking-widest text-white/10 hover:text-red-400 hover:bg-red-400/5 transition-colors"
