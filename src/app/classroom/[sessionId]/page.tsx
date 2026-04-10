@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -40,6 +39,20 @@ export default function PreacherCommandCenter() {
   const [bibleSearch, setBibleSearch] = useState('');
   const [finishedParagraphs, setFinishedParagraphs] = useState<number[]>([]);
   const [localNotes, setLocalNotes] = useState('');
+  const [currentTime, setCurrentTime] = useState<string | null>(null);
+
+  // --- Hydration Fix ---
+  useEffect(() => {
+    // Only set the time after initial hydration to prevent mismatch
+    setCurrentTime(new Date().toLocaleTimeString());
+    
+    // Optional: Update every second for a live feel
+    const timer = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString());
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
 
   // --- Firestore Integration ---
   const sessionDocRef = useMemoFirebase(() => {
@@ -227,7 +240,7 @@ export default function PreacherCommandCenter() {
             />
           </div>
           <div className="p-4 bg-slate-100 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">
-            Cloud Sync Active • {new Date().toLocaleTimeString()}
+            Cloud Sync Active • {currentTime || 'Initializing...'}
           </div>
         </aside>
       </main>
