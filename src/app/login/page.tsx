@@ -14,12 +14,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { InfoIcon, Loader2, ShieldCheck, Mail, Globe } from 'lucide-react';
+import { InfoIcon, Loader2, ShieldCheck, Mail, Globe, AlertTriangle } from 'lucide-react';
 
 export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
+  const [isPopupClosed, setIsPopupClosed] = useState(false);
+  
   const router = useRouter();
   const { toast } = useToast();
   const auth = useAuth();
@@ -37,12 +39,13 @@ export default function LoginPage() {
     localStorage.removeItem('google_access_token');
     setError(null);
     setIsUnauthorizedDomain(false);
+    setIsPopupClosed(false);
     setIsLoggingIn(true);
     
     try {
       const provider = new GoogleAuthProvider();
       
-      // Scopes for drive.file and presentations
+      // Essential scopes for the app functionality
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.addScope('https://www.googleapis.com/auth/presentations');
       
@@ -58,7 +61,7 @@ export default function LoginPage() {
         localStorage.setItem('google_access_token', credential.accessToken);
         toast({ 
           title: "Workspace Authorized", 
-          description: `Note: Click 'Advanced > Go to StudyForge' if prompted by Google.` 
+          description: "Sync active. Redirecting to HUD." 
         });
       }
       
@@ -68,7 +71,8 @@ export default function LoginPage() {
       
       if (err.code === 'auth/unauthorized-domain') {
         setIsUnauthorizedDomain(true);
-        setError("Domain Not Authorized");
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        setIsPopupClosed(true);
       } else {
         setError(err.message || "An unknown authentication error occurred.");
       }
@@ -76,7 +80,9 @@ export default function LoginPage() {
       toast({
         variant: 'destructive',
         title: 'Authentication Failed',
-        description: err.message,
+        description: err.code === 'auth/popup-closed-by-user' 
+          ? "Login window was closed prematurely." 
+          : err.message,
       });
     } finally {
       setIsLoggingIn(false);
@@ -96,7 +102,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
-      <Card className="w-full max-w-2xl border-none shadow-[0_0_100px_rgba(37,99,235,0.1)] bg-slate-900 text-white overflow-hidden">
+      <Card className="w-full max-w-2xl border-none shadow-[0_0_100px_rgba(37,99,235,0.1)] bg-slate-900 text-white overflow-hidden relative">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
         
         <CardHeader className="text-center space-y-4 pt-16 pb-8">
@@ -133,16 +139,29 @@ export default function LoginPage() {
               )}
             </Button>
 
-            {isUnauthorizedDomain ? (
+            {isPopupClosed && (
+              <Alert className="bg-amber-600/10 border-amber-600/40 text-amber-400 p-6 rounded-2xl animate-in fade-in slide-in-from-top-4">
+                <AlertTriangle className="size-6" />
+                <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Login Window Interrupted</AlertTitle>
+                <AlertDescription className="text-xs leading-relaxed italic">
+                  The login popup was closed before completion. This often happens due to **Popup Blockers** or clicking outside the window. 
+                  Please **ensure popups are allowed** for this domain and try again.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {isUnauthorizedDomain && (
               <Alert className="bg-red-600/10 border-red-600/40 text-red-400 p-6 rounded-2xl">
                 <Globe className="size-6" />
                 <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Domain Authorization Required</AlertTitle>
                 <AlertDescription className="text-xs leading-relaxed italic">
-                  To log in from this preview URL, you must add <span className="font-bold text-white underline">{window.location.hostname}</span> to your 
+                  To log in from this preview URL, you must add <span className="font-bold text-white underline">{typeof window !== 'undefined' ? window.location.hostname : 'this domain'}</span> to your 
                   <span className="font-bold text-white"> Firebase Console > Authentication > Settings > Authorized Domains</span> list.
                 </AlertDescription>
               </Alert>
-            ) : (
+            )}
+
+            {!isUnauthorizedDomain && !isPopupClosed && (
               <Alert className="bg-blue-600/10 border-blue-600/20 text-blue-400 p-6 rounded-2xl">
                 <InfoIcon className="size-6" />
                 <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Bypass Verification</AlertTitle>
@@ -154,7 +173,7 @@ export default function LoginPage() {
               </Alert>
             )}
 
-            {error && !isUnauthorizedDomain && (
+            {error && (
               <Alert variant="destructive" className="border-red-500/50 bg-red-500/10 text-red-400">
                 <InfoIcon className="size-6" />
                 <AlertTitle className="text-xl font-black uppercase">Auth Error</AlertTitle>
