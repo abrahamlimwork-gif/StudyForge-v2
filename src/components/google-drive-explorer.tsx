@@ -1,10 +1,11 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
 import { fetchGoogleSlides } from '@/lib/google-api-utils';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
-import { FileText, Loader2, RefreshCw, Presentation, ShieldCheck } from 'lucide-react';
+import { FileText, Loader2, RefreshCw, Presentation, ShieldCheck, ExternalLink, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
@@ -19,6 +20,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   const [files, setFiles] = useState<GoogleFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasToken, setHasToken] = useState(false);
+  const [isApiDisabled, setIsApiDisabled] = useState(false);
   const { toast } = useToast();
   const auth = useAuth();
 
@@ -31,16 +33,33 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
     setHasToken(true);
     setLoading(true);
+    setIsApiDisabled(false);
+    
     try {
       const googleFiles = await fetchGoogleSlides(accessToken);
       setFiles(googleFiles);
     } catch (error: any) {
       console.error('Drive fetch error:', error);
-      // Only clear token if it's explicitly an auth error (401/403)
-      if (error.message.includes('401') || error.message.includes('403')) {
+      
+      const errorMessage = error.message || '';
+      
+      // Handle the specific "API Disabled" error (403 SERVICE_DISABLED)
+      if (errorMessage.includes('403') && (errorMessage.includes('SERVICE_DISABLED') || errorMessage.includes('API has not been used'))) {
+        setIsApiDisabled(true);
+        toast({
+          variant: 'destructive',
+          title: 'Google Drive API Required',
+          description: 'The Drive API is disabled in your Google Cloud Console.',
+        });
+        return;
+      }
+
+      // Handle standard auth errors (401/403)
+      if (errorMessage.includes('401') || errorMessage.includes('403')) {
         setHasToken(false);
         localStorage.removeItem('google_access_token');
       }
+
       toast({
         variant: 'destructive',
         title: 'Library Sync Failed',
@@ -56,8 +75,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      // Required scopes for StudyForge AI and presentation HUD
-      // Added drive.metadata.readonly to allow listing existing files not created by this app
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.addScope('https://www.googleapis.com/auth/drive.metadata.readonly');
       provider.addScope('https://www.googleapis.com/auth/presentations');
@@ -88,6 +105,37 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   useEffect(() => {
     loadFiles();
   }, []);
+
+  if (isApiDisabled) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-6">
+        <div className="p-6 bg-red-500/10 rounded-full border border-red-500/20">
+          <AlertCircle className="size-12 text-red-400" />
+        </div>
+        <div className="space-y-4">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-red-400">API Access Required</p>
+          <p className="text-sm text-white/40 italic leading-relaxed">
+            The Google Drive API is not enabled for this project. Please enable it in your Google Cloud Console to browse your slides.
+          </p>
+          <Button 
+            variant="outline" 
+            onClick={() => window.open('https://console.developers.google.com/apis/api/drive.googleapis.com/overview', '_blank')}
+            className="w-full h-12 border-white/10 hover:bg-white/5 text-white/80 font-bold text-xs uppercase tracking-widest rounded-xl"
+          >
+            <ExternalLink className="mr-2 h-4 w-4" />
+            Enable Drive API
+          </Button>
+          <Button 
+            variant="ghost" 
+            onClick={() => loadFiles()}
+            className="text-[10px] uppercase font-black tracking-widest text-white/20 hover:text-white"
+          >
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!hasToken) {
     return (
