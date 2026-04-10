@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -10,8 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
-import { Plus, Video, Calendar, BookOpen } from 'lucide-react';
+import { Plus, Video, Calendar, BookOpen, Sparkles } from 'lucide-react';
 import { LessonPrompts } from '@/components/lesson-prompts';
+import { generateRandomRoomName } from '@/lib/room-utils';
 
 interface Session {
   id: string;
@@ -27,13 +27,10 @@ export default function DashboardPage() {
   const db = useFirestore();
   const router = useRouter();
   
-  const [newRoomName, setNewRoomName] = useState('');
   const [newTopic, setNewTopic] = useState('');
 
-  // Memoize the sessions query
   const sessionsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
-    // Aligning with backend.json: /users/{facilitatorId}/sessions/{sessionId}
     return query(
       collection(db, 'users', user.uid, 'sessions'), 
       orderBy('createdAt', 'desc')
@@ -50,12 +47,13 @@ export default function DashboardPage() {
 
   const handleCreateSession = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRoomName || !newTopic || !user || !db) return;
+    if (!newTopic || !user || !db) return;
 
+    const randomizedRoom = generateRandomRoomName();
     const sessionData = {
       name: newTopic,
       description: `Session about ${newTopic}`,
-      jitsiRoomName: newRoomName.replace(/\s+/g, '-').toLowerCase(),
+      jitsiRoomName: randomizedRoom,
       scheduledStartTime: new Date().toISOString(),
       facilitatorId: user.uid,
       createdAt: serverTimestamp(),
@@ -65,7 +63,6 @@ export default function DashboardPage() {
     const sessionsRef = collection(db, 'users', user.uid, 'sessions');
     addDocumentNonBlocking(sessionsRef, sessionData);
 
-    setNewRoomName('');
     setNewTopic('');
   };
 
@@ -77,16 +74,15 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto py-12 px-6">
         <header className="mb-12 space-y-4">
           <h1 className="text-5xl font-headline text-primary">Your Teaching Dashboard</h1>
-          <p className="text-2xl text-muted-foreground">Hello, {user.displayName || user.email}. Ready for today's lesson?</p>
+          <p className="text-2xl text-muted-foreground">Welcome back, {user.displayName || user.email}.</p>
         </header>
 
         <div className="grid lg:grid-cols-3 gap-12">
-          {/* Create Session Section */}
           <div className="lg:col-span-1 space-y-8">
             <Card className="border-2 shadow-lg">
               <CardHeader className="bg-primary/5">
-                <CardTitle className="text-3xl flex items-center gap-3">
-                  <Plus className="size-8 text-primary" />
+                <CardTitle className="text-3xl flex items-center gap-3 text-primary">
+                  <Plus className="size-8" />
                   New Session
                 </CardTitle>
               </CardHeader>
@@ -96,26 +92,15 @@ export default function DashboardPage() {
                     <Label htmlFor="topic" className="text-xl font-bold">Lesson Topic</Label>
                     <Input 
                       id="topic" 
-                      placeholder="e.g. The Parable of the Sower" 
+                      placeholder="e.g. Hope in Hard Times" 
                       className="h-14 text-xl"
                       value={newTopic}
                       onChange={(e) => setNewTopic(e.target.value)}
                       required
                     />
                   </div>
-                  <div className="space-y-3">
-                    <Label htmlFor="room" className="text-xl font-bold">Room Name</Label>
-                    <Input 
-                      id="room" 
-                      placeholder="e.g. morning-bible-study" 
-                      className="h-14 text-xl"
-                      value={newRoomName}
-                      onChange={(e) => setNewRoomName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full h-16 text-2xl bg-secondary hover:bg-secondary/90 font-bold">
-                    Start Classroom
+                  <Button type="submit" className="w-full h-16 text-2xl bg-accent hover:bg-accent/90 font-bold text-white shadow-md">
+                    Create & Start
                   </Button>
                 </form>
               </CardContent>
@@ -124,7 +109,6 @@ export default function DashboardPage() {
             <LessonPrompts />
           </div>
 
-          {/* Sessions List */}
           <div className="lg:col-span-2 space-y-6">
             <h2 className="text-3xl font-headline flex items-center gap-3 mb-6">
               <Calendar className="size-8 text-primary" />
@@ -132,16 +116,16 @@ export default function DashboardPage() {
             </h2>
             
             {isSessionsLoading ? (
-              <div className="text-2xl text-muted-foreground">Loading your sessions...</div>
+              <div className="text-2xl text-muted-foreground">Loading sessions...</div>
             ) : !sessions || sessions.length === 0 ? (
               <Card className="border-dashed border-4 p-12 text-center">
                 <CardContent>
                   <BookOpen className="size-16 mx-auto text-muted mb-4" />
-                  <p className="text-2xl text-muted-foreground">No sessions yet. Create your first one to get started!</p>
+                  <p className="text-2xl text-muted-foreground">No sessions yet. Create one to begin!</p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid md:grid-cols-1 gap-6">
+              <div className="grid gap-6">
                 {sessions.map((session) => (
                   <Card key={session.id} className="border-2 hover:border-primary transition-all shadow-md overflow-hidden group">
                     <div className="flex flex-col md:flex-row items-center p-8 gap-8">
@@ -150,14 +134,11 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex-grow text-center md:text-left space-y-2">
                         <h3 className="text-3xl font-bold text-primary">{session.name}</h3>
-                        <p className="text-xl text-muted-foreground">Room: {session.jitsiRoomName}</p>
-                        <p className="text-lg text-muted-foreground italic">
-                          {session.createdAt && `Created ${new Date(session.createdAt.seconds * 1000).toLocaleDateString()}`}
-                        </p>
+                        <p className="text-xl text-muted-foreground font-mono">Room ID: {session.jitsiRoomName}</p>
                       </div>
                       <Button 
                         size="lg" 
-                        className="h-16 px-10 text-2xl font-bold bg-primary"
+                        className="h-16 px-10 text-2xl font-bold bg-primary text-white"
                         onClick={() => router.push(`/classroom/${session.jitsiRoomName}`)}
                       >
                         Join Room
