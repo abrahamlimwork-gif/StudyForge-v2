@@ -14,6 +14,7 @@ import {
   Clock,
   Sparkles,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleDriveExplorer } from '@/components/google-drive-explorer';
@@ -78,7 +79,10 @@ export default function PresenterDashboard() {
       toast({ title: "Thinking...", description: "AI is outlining your sermon now." });
       
       // 1. Generate Content
-      const data = await generateSermonSlides({ topic: "The Power of Grace", scripture: "Ephesians 2:8" });
+      const data = await generateSermonSlides({ 
+        topic: "The Power of Grace", 
+        scripture: "Ephesians 2:8" 
+      });
       
       // 2. Create Presentation
       const presentation = await createGoogleSlides(token, `AI Sermon: ${data.title}`);
@@ -93,7 +97,17 @@ export default function PresenterDashboard() {
       toast({ title: "Sermon Ready!", description: "AI presentation created and saved to your Drive." });
     } catch (err: any) {
       console.error("AI Slide Gen Error:", err);
-      toast({ variant: 'destructive', title: 'Automation Failed', description: err.message || 'Failed to sync slides to Drive.' });
+      
+      let errorMessage = "Failed to sync slides to Drive.";
+      if (err.message?.includes('503') || err.message?.includes('high demand')) {
+        errorMessage = "AI is currently very busy. Please wait a moment and try again.";
+      }
+
+      toast({ 
+        variant: 'destructive', 
+        title: 'Automation Failed', 
+        description: errorMessage 
+      });
     } finally {
       setIsGenerating(false);
     }
