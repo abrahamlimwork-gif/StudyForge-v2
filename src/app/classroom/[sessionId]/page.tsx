@@ -1,164 +1,235 @@
+
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Check, Loader2, BookText, Share2, ShieldCheck } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Check, 
+  BookText, 
+  Share2, 
+  ExternalLink, 
+  Plus, 
+  Minus, 
+  Search, 
+  Maximize2, 
+  Minimize2,
+  Highlighter,
+  Save
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { useFirestore, useDoc, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import { cn } from '@/lib/utils';
 
-export default function ClassroomPage() {
+export default function PreacherCommandCenter() {
   const { sessionId } = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  
-  const [isIframeLoaded, setIsIframeLoaded] = useState(false);
-  const [hasCopied, setHasCopied] = useState(false);
+  const db = useFirestore();
 
+  // --- State ---
+  const [fontSize, setFontSize] = useState(24);
+  const [isMeetingMode, setIsMeetingMode] = useState(false);
+  const [hasCopied, setHasCopied] = useState(false);
+  const [bibleSearch, setBibleSearch] = useState('');
+  const [finishedParagraphs, setFinishedParagraphs] = useState<number[]>([]);
+  const [localNotes, setLocalNotes] = useState('');
+
+  // --- Firestore Integration ---
+  const sessionDocRef = useMemoFirebase(() => {
+    if (!db || !sessionId) return null;
+    return doc(db, 'public_sessions', sessionId as string);
+  }, [db, sessionId]);
+
+  const { data: sessionData, isLoading: isSessionLoading } = useDoc(sessionDocRef);
+
+  // Auto-sync notes from Firestore on initial load
+  useEffect(() => {
+    if (sessionData?.notes && !localNotes) {
+      setLocalNotes(sessionData.notes);
+    }
+  }, [sessionData]);
+
+  // Debounced auto-save for notes
+  useEffect(() => {
+    if (!sessionDocRef || localNotes === (sessionData?.notes || '')) return;
+
+    const timeout = setTimeout(() => {
+      updateDocumentNonBlocking(sessionDocRef, { 
+        notes: localNotes,
+        updatedAt: new Date().toISOString() 
+      });
+    }, 1000);
+
+    return () => clearTimeout(timeout);
+  }, [localNotes, sessionDocRef, sessionData?.notes]);
+
+  // --- Actions ---
   const roomName = typeof sessionId === 'string' ? sessionId : 'TestSession';
   const jitsiUrl = `https://meet.jit.si/${roomName}`;
 
   const copyInviteLink = () => {
     navigator.clipboard.writeText(jitsiUrl);
     setHasCopied(true);
-    toast({
-      title: "Link Copied!",
-      description: "You can now share this link with your students.",
-    });
+    toast({ title: "Link Copied!", description: "Share this link with your congregation." });
     setTimeout(() => setHasCopied(false), 2000);
   };
 
+  const launchJitsi = () => {
+    window.open(jitsiUrl, '_blank');
+  };
+
+  const toggleParagraph = (index: number) => {
+    setFinishedParagraphs(prev => 
+      prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+    );
+  };
+
+  // --- UI Components ---
+  const manuscriptParagraphs = [
+    "Opening Prayer: Gracious Lord, we thank You for this gathering. Open our hearts to Your Word today.",
+    "The core of our message today is 'Unyielding Faith'. In a world of shifting sands, we find our rock in Christ.",
+    "Reflect on Hebrews 11:1. Faith is not just a feeling, but the substance of what we hope for.",
+    "Key Point: Persistence is developed in the trials, not the triumphs. James 1:12 reminds us of the crown of life.",
+    "Conclusion: As you leave this virtual sanctuary, carry this persistence with you. Amen."
+  ];
+
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      <Navbar />
+    <div className={cn("h-screen flex flex-col bg-background transition-all", isMeetingMode ? "overflow-hidden" : "")}>
+      {!isMeetingMode && <Navbar />}
       
-      {/* High-Visibility Header */}
-      <div className="bg-white border-b px-8 py-3 flex items-center justify-between shadow-sm z-10 shrink-0">
-        <div className="flex items-center gap-6">
-          <Button 
-            variant="destructive" 
-            size="lg" 
-            className="text-xl h-14 px-6 font-bold shadow-sm"
-            onClick={() => router.push('/')}
-          >
-            <ArrowLeft className="mr-2 size-5" />
-            End Test
-          </Button>
-          <div className="hidden lg:flex items-center gap-3 px-4 py-2 bg-green-50 border border-green-200 rounded-lg text-green-700 font-bold">
-            <ShieldCheck className="size-5" />
-            <span>Public Test Room</span>
-          </div>
+      {/* Persistent Toolbar */}
+      <div className="bg-white border-b px-8 py-3 flex items-center justify-between shadow-sm z-50 shrink-0">
+        <div className="flex items-center gap-4">
+          {!isMeetingMode && (
+            <Button variant="ghost" size="lg" onClick={() => router.push('/dashboard')} className="text-lg font-bold">
+              <ArrowLeft className="mr-2" /> Back
+            </Button>
+          )}
+          <h1 className="text-2xl font-black text-primary uppercase hidden md:block">
+            {sessionData?.name || "Session Control"}
+          </h1>
         </div>
 
-        <div className="flex items-center gap-4">
-          <Button
-            onClick={copyInviteLink}
-            disabled={!isIframeLoaded}
-            variant="secondary"
-            size="lg"
-            className="h-14 text-xl font-black px-8 shadow-md"
+        <div className="flex items-center gap-3">
+          <Button onClick={copyInviteLink} variant="outline" size="lg" className="h-12 text-lg font-bold px-6">
+            {hasCopied ? <Check className="mr-2" /> : <Share2 className="mr-2" />}
+            {hasCopied ? "COPIED" : "COPY LINK"}
+          </Button>
+          <Button onClick={launchJitsi} variant="secondary" size="lg" className="h-12 text-lg font-black px-6 shadow-md">
+            <ExternalLink className="mr-2" /> LAUNCH VIDEO
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setIsMeetingMode(!isMeetingMode)}
+            className="h-12 w-12 border"
           >
-            {hasCopied ? <Check className="mr-2 size-6" /> : <Share2 className="mr-2 size-6" />}
-            {hasCopied ? "COPIED" : "SHARE INVITE LINK"}
+            {isMeetingMode ? <Minimize2 /> : <Maximize2 />}
           </Button>
         </div>
       </div>
 
-      {/* Main Desktop Layout: Split Pane */}
-      <main className="flex-grow flex flex-row overflow-hidden">
+      <main className="flex-grow flex flex-row overflow-hidden bg-[#f8fafc]">
         
-        {/* Left Panel: Jitsi Video (60%) */}
-        <section className="w-[60%] relative bg-black border-r-4 border-primary/10">
-          {!isIframeLoaded && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-20 space-y-4">
-              <Loader2 className="size-16 animate-spin text-secondary" />
-              <p className="text-white text-2xl font-bold uppercase">Opening Classroom...</p>
-            </div>
-          )}
-          <iframe
-            src={`${jitsiUrl}#config.prejoinPageEnabled=false&config.disableWelcomePage=true&interfaceConfig.SHOW_JITSI_WATERMARK=false`}
-            allow="camera; microphone; display-capture; fullscreen"
-            className="w-full h-full border-none"
-            onLoad={() => setIsIframeLoaded(true)}
-          />
-        </section>
-
-        {/* Right Panel: Teacher's Command Center (40%) */}
-        <section className="w-[40%] bg-white flex flex-col shadow-inner">
-          <div className="p-6 bg-primary text-white shrink-0">
-            <h2 className="text-3xl font-headline font-black flex items-center gap-3 uppercase">
-              <BookText className="size-8" />
-              Command Center
+        {/* Left Column: Bible Sidebar (25%) */}
+        <aside className={cn("w-[25%] border-r-2 bg-white flex flex-col transition-all", isMeetingMode ? "border-none" : "")}>
+          <div className="p-6 bg-slate-50 border-b">
+            <h2 className="text-xl font-black uppercase text-slate-500 mb-4 flex items-center gap-2">
+              <Search className="size-5" /> Bible Search
             </h2>
+            <div className="relative">
+              <Input 
+                placeholder="Search Scripture..." 
+                className="h-12 text-lg pl-10"
+                value={bibleSearch}
+                onChange={(e) => setBibleSearch(e.target.value)}
+              />
+              <Search className="absolute left-3 top-3.5 text-slate-400 size-5" />
+            </div>
+          </div>
+          <ScrollArea className="flex-grow p-6">
+            <div className="space-y-6">
+              <div className="p-4 bg-primary/5 rounded-xl border-l-4 border-primary">
+                <p className="font-bold text-primary mb-1">Hebrews 11:1</p>
+                <p className="text-lg italic">"Now faith is the substance of things hoped for..."</p>
+              </div>
+              <div className="p-4 bg-secondary/5 rounded-xl border-l-4 border-secondary">
+                <p className="font-bold text-secondary mb-1">James 1:12</p>
+                <p className="text-lg italic">"Blessed is the man who endures temptation..."</p>
+              </div>
+              <p className="text-center text-slate-400 italic text-sm py-8 border-t">
+                Enter a reference or keyword to find more verses.
+              </p>
+            </div>
+          </ScrollArea>
+        </aside>
+
+        {/* Middle Column: Manuscript (50%) */}
+        <section className="flex-grow w-[50%] bg-white shadow-lg z-10 flex flex-col border-r-2">
+          <div className="p-4 bg-slate-50 border-b flex justify-between items-center px-8">
+            <div className="flex items-center gap-2">
+              <Highlighter className="size-5 text-accent" />
+              <span className="text-sm font-black text-slate-500 uppercase">Manuscript Mode</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={() => setFontSize(f => Math.max(16, f - 2))}><Minus /></Button>
+              <span className="font-mono font-bold w-12 text-center text-xl">{fontSize}px</span>
+              <Button variant="outline" size="icon" onClick={() => setFontSize(f => Math.min(48, f + 2))}><Plus /></Button>
+            </div>
           </div>
 
-          <Tabs defaultValue="manuscript" className="flex-grow flex flex-col overflow-hidden">
-            <div className="px-6 py-2 bg-slate-50 border-b">
-              <TabsList className="grid w-full grid-cols-2 h-12">
-                <TabsTrigger value="manuscript" className="text-lg font-bold">MANUSCRIPT</TabsTrigger>
-                <TabsTrigger value="bible" className="text-lg font-bold">BIBLE NOTES</TabsTrigger>
-              </TabsList>
-            </div>
-
-            <ScrollArea className="flex-grow p-8">
-              <TabsContent value="manuscript" className="mt-0 space-y-6">
-                <div className="space-y-4">
-                  <h3 className="text-2xl font-black text-primary border-b-2 pb-2">LESSON MANUSCRIPT</h3>
-                  <div className="text-xl text-slate-800 leading-relaxed space-y-6">
-                    <p className="font-bold bg-yellow-50 p-4 border-l-4 border-yellow-400">
-                      [START HERE] Welcome everyone and open with a prayer of gratitude.
-                    </p>
-                    <p>
-                      Today we explore the concept of "Persistence in Faith." Our journey begins with a reflection on how we handle life's storms. 
-                    </p>
-                    <p className="italic text-slate-500">
-                      (Pause for 10 seconds to allow participants to reflect)
-                    </p>
-                    <p>
-                      Key Point 1: Persistence is not just about waiting; it's about active endurance. When we look at the historical context...
-                    </p>
-                    <div className="bg-slate-50 p-6 rounded-xl border-2 border-dashed">
-                      <p className="text-lg font-bold text-slate-600 mb-2 uppercase tracking-wide">Discussion Trigger:</p>
-                      <p className="text-2xl font-black text-primary italic">
-                        "Can anyone share a time when waiting for an answer actually strengthened your resolve?"
-                      </p>
-                    </div>
-                  </div>
+          <ScrollArea className="flex-grow">
+            <article className="max-w-3xl mx-auto py-12 px-12 space-y-12">
+              {manuscriptParagraphs.map((para, idx) => (
+                <div 
+                  key={idx}
+                  onClick={() => toggleParagraph(idx)}
+                  className={cn(
+                    "cursor-pointer transition-all p-6 rounded-2xl border-2 border-transparent hover:border-slate-100",
+                    finishedParagraphs.includes(idx) ? "opacity-30 bg-slate-50" : "opacity-100"
+                  )}
+                  style={{ fontSize: `${fontSize}px`, lineHeight: 1.5 }}
+                >
+                  <p className={cn(
+                    "font-medium text-slate-900",
+                    finishedParagraphs.includes(idx) ? "line-through" : ""
+                  )}>
+                    {para}
+                  </p>
                 </div>
-              </TabsContent>
-
-              <TabsContent value="bible" className="mt-0 space-y-6">
-                <div className="space-y-4">
-                  <h3 className="text-2xl font-black text-primary border-b-2 pb-2">SCRIPTURE REFRESHER</h3>
-                  <div className="space-y-8">
-                    <div className="bg-primary/5 p-6 rounded-xl border-l-8 border-primary">
-                      <p className="text-xl font-bold text-primary mb-2">Hebrews 11:1 (NKJV)</p>
-                      <p className="text-2xl italic leading-relaxed">
-                        "Now faith is the substance of things hoped for, the evidence of things not seen."
-                      </p>
-                    </div>
-                    <div className="bg-secondary/5 p-6 rounded-xl border-l-8 border-secondary">
-                      <p className="text-xl font-bold text-secondary mb-2">James 1:12</p>
-                      <p className="text-2xl italic leading-relaxed">
-                        "Blessed is the man who endures temptation; for when he has been approved, he will receive the crown of life..."
-                      </p>
-                    </div>
-                    <div className="pt-4 border-t">
-                      <h4 className="text-lg font-bold text-slate-500 uppercase mb-3">Contextual Notes:</h4>
-                      <ul className="list-disc pl-6 space-y-3 text-xl">
-                        <li>The Greek word for "substance" is <em>hupostasis</em>, meaning "assurance" or "foundation."</li>
-                        <li>Consider the audience: Early Christians facing severe trials.</li>
-                        <li>Cross-reference with Romans 5:3-5 for the chain of character building.</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-            </ScrollArea>
-          </Tabs>
+              ))}
+              <div className="h-32" /> {/* Bottom spacing */}
+            </article>
+          </ScrollArea>
         </section>
+
+        {/* Right Column: Live Notes (25%) */}
+        <aside className="w-[25%] bg-slate-50 flex flex-col">
+          <div className="p-6 bg-white border-b flex items-center justify-between">
+            <h2 className="text-xl font-black uppercase text-slate-500 flex items-center gap-2">
+              <Save className="size-5" /> Live Notes
+            </h2>
+            <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse" title="Auto-saving enabled" />
+          </div>
+          <div className="flex-grow p-6 flex flex-col">
+            <Textarea 
+              placeholder="Jot down inspiration here... (Auto-saves)"
+              className="flex-grow text-xl p-6 border-2 focus:ring-4 rounded-2xl shadow-inner resize-none bg-white"
+              value={localNotes}
+              onChange={(e) => setLocalNotes(e.target.value)}
+            />
+          </div>
+          <div className="p-4 bg-slate-100 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">
+            Cloud Sync Active • {new Date().toLocaleTimeString()}
+          </div>
+        </aside>
       </main>
     </div>
   );
