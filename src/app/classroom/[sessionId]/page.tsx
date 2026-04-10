@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,10 @@ export default function PresenterDashboard() {
   const [speakerNotes, setSpeakerNotes] = useState<string[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [loadingNotes, setLoadingNotes] = useState(false);
+  const [isAudienceLive, setIsAudienceLive] = useState(false);
+
+  // Reference to track the audience window
+  const audienceWindowRef = useRef<Window | null>(null);
 
   // Sidebar visibility states
   const [isLibraryVisible, setIsLibraryVisible] = useState(true);
@@ -99,6 +103,20 @@ export default function PresenterDashboard() {
     return `https://docs.google.com/presentation/d/${selectedFileId}/embed?rm=minimal&slide=id.p${currentSlideIndex + 1}`;
   }, [selectedFileId, currentSlideIndex]);
 
+  // Audience view URL
+  const audienceUrl = useMemo(() => {
+    if (!selectedFileId) return null;
+    return `https://docs.google.com/presentation/d/${selectedFileId}/present?rm=minimal&slide=id.p${currentSlideIndex + 1}`;
+  }, [selectedFileId, currentSlideIndex]);
+
+  // Sync Audience Window whenever the slide index changes
+  useEffect(() => {
+    if (isAudienceLive && audienceUrl) {
+      // Re-opening with the same window name ('StudyForgeAudience') updates the existing window
+      audienceWindowRef.current = window.open(audienceUrl, 'StudyForgeAudience');
+    }
+  }, [currentSlideIndex, isAudienceLive, audienceUrl]);
+
   const roomName = typeof sessionId === 'string' ? sessionId : 'TestSession';
   const jitsiUrl = `https://meet.jit.si/${roomName}`;
 
@@ -110,14 +128,18 @@ export default function PresenterDashboard() {
   };
 
   const handleLaunchAudience = () => {
-    if (selectedFileId) {
-      window.open(`https://docs.google.com/presentation/d/${selectedFileId}/present?start=true&slide=id.p${currentSlideIndex + 1}`, '_blank');
-      toast({ title: "Audience Window Launched", description: "The presentation is now open in a separate tab." });
+    if (audienceUrl) {
+      audienceWindowRef.current = window.open(audienceUrl, 'StudyForgeAudience');
+      setIsAudienceLive(true);
+      toast({ 
+        title: "Audience Sync Active", 
+        description: "The external window is now slaved to your HUD navigation." 
+      });
     }
   };
 
   const goToNextSlide = () => {
-    if (currentSlideIndex < speakerNotes.length - 1) {
+    if (currentSlideIndex < (speakerNotes.length || 1) - 1) {
       setCurrentSlideIndex(prev => prev + 1);
     }
   };
@@ -183,9 +205,15 @@ export default function PresenterDashboard() {
           {selectedFileId && (
             <Button 
               onClick={handleLaunchAudience}
-              className="bg-red-600 hover:bg-red-500 text-white font-black h-12 px-6 shadow-xl shadow-red-500/20 rounded-xl text-[10px] tracking-widest uppercase"
+              className={cn(
+                "font-black h-12 px-6 rounded-xl text-[10px] tracking-widest uppercase transition-all shadow-xl",
+                isAudienceLive 
+                  ? "bg-green-600 hover:bg-green-500 text-white shadow-green-500/20" 
+                  : "bg-red-600 hover:bg-red-500 text-white shadow-red-500/20"
+              )}
             >
-              <Radio className="mr-2 h-4 w-4 animate-pulse" /> LIVE STREAM
+              <Radio className={cn("mr-2 h-4 w-4", isAudienceLive && "animate-pulse")} /> 
+              {isAudienceLive ? "SYNC ACTIVE" : "GO LIVE"}
             </Button>
           )}
 
@@ -256,11 +284,11 @@ export default function PresenterDashboard() {
             <>
               <div className="absolute top-6 right-6 z-[60] flex gap-3">
                 <Button 
-                  onClick={() => window.open(`https://docs.google.com/presentation/d/${selectedFileId}/present#slide=id.p${currentSlideIndex + 1}`, '_blank')}
+                  onClick={handleLaunchAudience}
                   variant="secondary"
                   className="bg-blue-600/90 hover:bg-blue-600 text-white font-black border-none h-10 px-4 rounded-xl shadow-2xl text-[10px] tracking-widest"
                 >
-                  <Maximize2 className="mr-2 h-4 w-4" /> POP OUT
+                  <Maximize2 className="mr-2 h-4 w-4" /> {isAudienceLive ? "REFRESH SYNC" : "POP OUT"}
                 </Button>
               </div>
               
@@ -286,7 +314,7 @@ export default function PresenterDashboard() {
                   <Button 
                     variant="ghost" 
                     onClick={goToNextSlide}
-                    disabled={currentSlideIndex >= speakerNotes.length - 1}
+                    disabled={currentSlideIndex >= (speakerNotes.length || 1) - 1}
                     className="size-16 rounded-full bg-black/40 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity text-white hover:bg-black/60 border border-white/10"
                   >
                     <ChevronRight className="size-10" />
@@ -322,11 +350,16 @@ export default function PresenterDashboard() {
               </div>
 
               <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-[60] w-full max-w-sm">
-                <Alert className="bg-black/80 backdrop-blur-xl border-blue-500/20 text-white rounded-2xl shadow-2xl">
-                  <Gamepad2 className="h-4 w-4 text-blue-400" />
-                  <AlertTitle className="text-[10px] font-black uppercase tracking-widest text-blue-400">HUD Sync Enabled</AlertTitle>
+                <Alert className={cn(
+                  "bg-black/80 backdrop-blur-xl border-blue-500/20 text-white rounded-2xl shadow-2xl transition-colors",
+                  isAudienceLive && "border-green-500/40"
+                )}>
+                  <Gamepad2 className={cn("h-4 w-4", isAudienceLive ? "text-green-400" : "text-blue-400")} />
+                  <AlertTitle className={cn("text-[10px] font-black uppercase tracking-widest", isAudienceLive ? "text-green-400" : "text-blue-400")}>
+                    {isAudienceLive ? "Audience SYNC Active" : "HUD Sync Ready"}
+                  </AlertTitle>
                   <AlertDescription className="text-[9px] font-bold text-white/60">
-                    Use HUD buttons for instant slide & note synchronization.
+                    {isAudienceLive ? "External window is currently tracking your navigation." : "Launch audience view to enable real-time tracking."}
                   </AlertDescription>
                 </Alert>
               </div>
