@@ -80,6 +80,14 @@ service cloud.firestore {
       }
     }
 
+    /**
+     * @description Rules for Uploaded Presentations (Speaker Notes Sync).
+     * @path /presentations/{presentationId}
+     */
+    match /presentations/{presentationId} {
+      allow read, write: if isSignedIn();
+    }
+
     // --- Global Deny-All ---
     match /{document=**} {
       allow read, write: if false;

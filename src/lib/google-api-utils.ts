@@ -3,7 +3,7 @@
  */
 
 export async function fetchGoogleSlides(accessToken: string) {
-  const query = encodeURIComponent("mimeType='application/vnd.google-apps.presentation' and trashed = false");
+  const query = encodeURIComponent("(mimeType='application/vnd.google-apps.presentation' or mimeType='application/pdf' or mimeType='application/vnd.openxmlformats-officedocument.presentationml.presentation') and trashed = false");
   const fields = encodeURIComponent("files(id, name, modifiedTime)");
   
   const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${fields}`;
@@ -27,66 +27,37 @@ export async function fetchGoogleSlides(accessToken: string) {
 }
 
 /**
- * Uploads a local file to Google Drive.
+ * Uploads a local file to Google Drive via the /api/drive-upload server proxy.
+ * Returns the Google File object { id, name, mimeType, webViewLink } on success.
+ * Logs the exact Google API error to the browser console on failure.
  */
-export async function uploadFileToDrive(accessToken: string, file: File) {
-  const metadata = {
-    name: file.name,
-    mimeType: file.type || 'application/octet-stream',
-  };
-
+export async function uploadFileToDrive(accessToken: string, file: File): Promise<{ id: string; name: string; mimeType: string; webViewLink?: string; notes?: string[] }> {
   const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file', file);
+  form.append('accessToken', accessToken);
+  form.append('file', file, file.name);
+  form.append('fileName', file.name);
+  form.append('fileMime', file.type || 'application/octet-stream');
 
-  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+  const response = await fetch('/api/drive-upload', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
     body: form,
   });
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Upload Error: ${response.status} - ${errorBody}`);
-  }
-
-  return await response.json();
-}
-
-/**
- * Fetches speaker notes for all slides in a presentation.
- */
-export async function fetchSpeakerNotes(accessToken: string, presentationId: string) {
-  const url = `https://slides.googleapis.com/v1/presentations/${presentationId}`;
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  const data = await response.json().catch(() => ({ error: response.statusText }));
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Slides API Error: ${response.status} - ${errorBody}`);
+    // Surface the exact Google error to the browser console
+    console.error('[StudyForge] Drive Upload Failed:', {
+      status: response.status,
+      error: data.error,
+      googleDetail: data.detail,
+    });
+    throw new Error(data.detail ? `${data.error}\n\nGoogle said: ${data.detail}` : data.error ?? 'Upload failed');
   }
 
-  const data = await response.json();
-  if (!data.slides) return [];
-  
-  return data.slides.map((slide: any) => {
-    const notesPage = slide.notesPage;
-    if (!notesPage) return "";
-    
-    const notesElement = notesPage.pageElements?.find((el: any) => el.shape?.shapeType === 'SPEAKER_NOTES');
-    if (!notesElement || !notesElement.shape.text) return "";
-    
-    return notesElement.shape.text.textElements
-      .map((te: any) => te.textRun?.content || "")
-      .join("")
-      .trim();
-  });
+  return data;
 }
+
 
 export async function createGoogleSlides(accessToken: string, title: string) {
   const response = await fetch('https://www.googleapis.com/slides/v1/presentations', {

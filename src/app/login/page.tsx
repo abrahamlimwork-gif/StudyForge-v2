@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const isProcessing = useRef(false);
   
   const router = useRouter();
@@ -34,6 +35,7 @@ export default function LoginPage() {
     isProcessing.current = true;
 
     const captureRedirect = async () => {
+      setIsSyncing(true);
       try {
         const result = await getRedirectResult(auth);
         if (result) {
@@ -41,12 +43,17 @@ export default function LoginPage() {
           if (credential?.accessToken) {
             localStorage.setItem('google_access_token', credential.accessToken);
           }
+          console.log("Logged in user email:", result.user?.email);
+          console.log("Access Token:", credential?.accessToken);
           toast({ title: "Login Successful", description: "Identity synchronized." });
           router.replace('/dashboard');
+        } else {
+          setIsSyncing(false);
         }
       } catch (err: any) {
         console.error("Redirect Capture Error:", err);
         setError(err.message);
+        setIsSyncing(false);
       }
     };
 
@@ -85,11 +92,13 @@ export default function LoginPage() {
     }
   };
 
-  if (isUserLoading) {
+  if (isUserLoading || isSyncing) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center space-y-8">
         <Loader2 className="size-24 animate-spin text-blue-500 opacity-50" />
-        <p className="text-blue-400 font-bold uppercase text-[10px] tracking-[0.3em]">Checking Session...</p>
+        <p className="text-blue-400 font-bold uppercase text-[10px] tracking-[0.3em]">
+          {isSyncing ? "Synchronizing BibleSync.AI..." : "Checking Session..."}
+        </p>
       </div>
     );
   }
