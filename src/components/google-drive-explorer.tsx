@@ -142,7 +142,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
       toast({
         variant: 'destructive',
         title: 'Connection Failed',
-        description: err.code === 'auth/popup-closed-by-user' 
+        description: err.code === 'auth/unauthorized-domain' 
           ? 'Popup was blocked. Please use the Redirect button.'
           : 'Detailed debug info logged below.',
       });
