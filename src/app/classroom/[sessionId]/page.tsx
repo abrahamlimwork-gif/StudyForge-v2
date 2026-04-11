@@ -21,7 +21,8 @@ import {
   Gamepad2,
   Layout,
   HardDrive,
-  CloudUpload
+  CloudUpload,
+  AlertTriangle
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleDriveExplorer } from '@/components/google-drive-explorer';
@@ -42,6 +43,7 @@ export default function PresenterDashboard() {
   const [hasCopied, setHasCopied] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [localFileUrl, setLocalFileUrl] = useState<string | null>(null);
+  const [localFileType, setLocalFileType] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
@@ -73,17 +75,29 @@ export default function PresenterDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // Handle local file selection and URL cleanup
   const handleFileSelect = (id: string, file?: File) => {
+    if (localFileUrl) {
+      URL.revokeObjectURL(localFileUrl);
+    }
+
     setSelectedFileId(id);
     if (file) {
-      // Create a blob URL for local preview
       const url = URL.createObjectURL(file);
       setLocalFileUrl(url);
-      setSpeakerNotes(["Local Mode Active", "Browser controls handle navigation for local files."]);
+      setLocalFileType(file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'pptx');
+      setSpeakerNotes(["Local HUD Active", `Rendering file: ${file.name}`]);
     } else {
       setLocalFileUrl(null);
+      setLocalFileType(null);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (localFileUrl) URL.revokeObjectURL(localFileUrl);
+    };
+  }, [localFileUrl]);
 
   useEffect(() => {
     if (selectedFileId && !isLocalFile) {
@@ -135,7 +149,7 @@ export default function PresenterDashboard() {
 
   const handleLaunchAudience = () => {
     if (isLocalFile) {
-      toast({ variant: 'destructive', title: 'Action Unavailable', description: 'Local files cannot be slaved to the audience view yet.' });
+      toast({ variant: 'destructive', title: 'Sync Blocked', description: 'Local files require a manual audience window in this mode.' });
       return;
     }
     if (audienceUrl) {
@@ -267,11 +281,24 @@ export default function PresenterDashboard() {
             <div className="flex-grow flex flex-col">
               <div className="flex-grow relative bg-slate-950 flex items-center justify-center">
                 {isLocalFile ? (
-                  <iframe 
-                    src={localFileUrl!} 
-                    className="w-full h-full border-none bg-white" 
-                    title="Local File Viewer"
-                  />
+                  <div className="w-full h-full relative">
+                    <iframe 
+                      src={`${localFileUrl}#toolbar=0`} 
+                      className="w-full h-full border-none bg-slate-900" 
+                      title="Local File Viewer"
+                    />
+                    {localFileType === 'pptx' && (
+                      <div className="absolute top-4 left-1/2 -translate-x-1/2 w-full max-w-md">
+                        <Alert className="bg-amber-500/10 border-amber-500/50 text-amber-500 rounded-2xl shadow-2xl backdrop-blur-xl">
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertTitle className="text-[10px] font-black uppercase tracking-widest">Format Notice</AlertTitle>
+                          <AlertDescription className="text-[10px] leading-relaxed">
+                            Browsers cannot natively render PPTX. Please drag in a <strong>PDF</strong> for full HUD immersion.
+                          </AlertDescription>
+                        </Alert>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <iframe src={slidesUrl!} className="w-full h-full border-none" allowFullScreen />
                 )}
