@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
@@ -30,13 +31,15 @@ export default function LoginPage() {
   const { toast } = useToast();
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
-  const hasCheckedRedirect = useRef(false);
+  const hasProcessedRedirect = useRef(false);
 
   useEffect(() => {
-    if (!auth || hasCheckedRedirect.current) return;
-    hasCheckedRedirect.current = true;
+    if (!auth || hasProcessedRedirect.current) return;
 
     const handleRedirectResult = async () => {
+      // Ensure we only try to process the redirect result once per mount
+      hasProcessedRedirect.current = true;
+      
       try {
         console.log("--- AUTH DEBUG: Checking Redirect Result ---");
         const result = await getRedirectResult(auth);
@@ -56,7 +59,6 @@ export default function LoginPage() {
         console.error("--- AUTH DEBUG: Redirect Error ---");
         console.error("Code:", err.code);
         console.error("Msg:", err.message);
-        console.error("Data:", err.customData);
         
         setDebugInfo({ code: err.code, message: err.message });
 
@@ -92,6 +94,7 @@ export default function LoginPage() {
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.setCustomParameters({ prompt: 'select_account' });
       
+      // Force persistence to local storage to ensure redirect works
       await setPersistence(auth, browserLocalPersistence);
 
       if (method === 'popup') {
@@ -112,15 +115,14 @@ export default function LoginPage() {
       console.error("--- AUTH DEBUG: Login Exception ---");
       console.error("Code:", err.code);
       console.error("Msg:", err.message);
-      console.error("Data:", err.customData);
 
-      setDebugInfo({ code: err.code, message: err.message, data: err.customData });
+      setDebugInfo({ code: err.code, message: err.message });
 
       if (err.code === 'auth/unauthorized-domain') {
         setIsUnauthorizedDomain(true);
       } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         setIsPopupClosed(true);
-        setUseRedirect(true);
+        setUseRedirect(true); // Hint to use redirect
       } else {
         setError(err.message);
       }
@@ -196,7 +198,7 @@ export default function LoginPage() {
                 <AlertTriangle className="size-6" />
                 <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Browser Restriction</AlertTitle>
                 <AlertDescription className="text-xs leading-relaxed italic">
-                  Popup was blocked or closed. Please use the **Redirect (Stable Fallback)** button for a guaranteed login.
+                  Popup was blocked. Please use the **Redirect (Stable Fallback)** button for a guaranteed login.
                 </AlertDescription>
               </Alert>
             )}
@@ -214,7 +216,7 @@ export default function LoginPage() {
             {debugInfo && (
               <Alert className="bg-slate-800/50 border-blue-500/20 text-blue-400 p-4 rounded-xl font-mono text-[10px]">
                 <Bug className="size-4 mb-2" />
-                <AlertTitle className="uppercase font-black tracking-widest mb-1">Raw Error Debug</AlertTitle>
+                <AlertTitle className="uppercase font-black tracking-widest mb-1">Debug Info</AlertTitle>
                 <div className="space-y-1">
                   <p>CODE: {debugInfo.code}</p>
                   <p>MSG: {debugInfo.message}</p>
