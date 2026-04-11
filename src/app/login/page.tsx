@@ -23,33 +23,40 @@ export default function LoginPage() {
   const [isProcessingRedirect, setIsProcessingRedirect] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
-  const [popupBlocked, setPopupBlocked] = useState(false);
   
   const router = useRouter();
   const { toast } = useToast();
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
-  const redirectProcessed = useRef(false);
+  const redirectCaptured = useRef(false);
 
   useEffect(() => {
-    if (!auth || redirectProcessed.current) return;
+    if (!auth || redirectCaptured.current) return;
 
     const captureRedirect = async () => {
-      redirectProcessed.current = true;
+      console.log("--- AUTH: Checking for redirect result ---");
       try {
         const result = await getRedirectResult(auth);
+        redirectCaptured.current = true;
+        
         if (result) {
+          console.log("--- AUTH: Redirect result found! ---");
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
+            console.log("--- AUTH: Access Token captured ---");
             localStorage.setItem('google_access_token', credential.accessToken);
           }
-          toast({ title: "Welcome Back", description: "Identity synchronized successfully." });
+          toast({ 
+            title: "Identity Verified", 
+            description: "Workspace handshake complete. Synchronizing archive...",
+          });
           router.replace('/dashboard');
         } else {
+          console.log("--- AUTH: No redirect result to process ---");
           setIsProcessingRedirect(false);
         }
       } catch (err: any) {
-        console.error("--- REDIRECT CAPTURE ERROR ---", err.code);
+        console.error("--- AUTH REDIRECT ERROR ---", err.code);
         if (err.code === 'auth/unauthorized-domain') {
           setUnauthorizedDomain(window.location.hostname);
         } else {
@@ -73,11 +80,11 @@ export default function LoginPage() {
     
     setError(null);
     setUnauthorizedDomain(null);
-    setPopupBlocked(false);
     setIsLoggingIn(true);
     
     try {
       const provider = new GoogleAuthProvider();
+      // Required scope for Drive Explorer
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.setCustomParameters({ prompt: 'select_account' });
       
@@ -89,6 +96,7 @@ export default function LoginPage() {
         if (credential?.accessToken) {
           localStorage.setItem('google_access_token', credential.accessToken);
         }
+        toast({ title: "Success", description: "Connected via Popup." });
         router.push('/dashboard');
       } else {
         await signInWithRedirect(auth, provider);
@@ -99,11 +107,14 @@ export default function LoginPage() {
       if (err.code === 'auth/unauthorized-domain') {
         setUnauthorizedDomain(window.location.hostname);
       } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        setPopupBlocked(true);
+        toast({ 
+          variant: "destructive", 
+          title: "Popup Blocked", 
+          description: "Browser blocked the window. Using Redirect Fallback is recommended." 
+        });
       } else {
         setError(err.message);
       }
-    } finally {
       setIsLoggingIn(false);
     }
   };
@@ -140,41 +151,30 @@ export default function LoginPage() {
         <CardContent className="space-y-8 p-12 pt-0">
           <div className="grid gap-4">
             <Button 
-              onClick={() => handleLogin('popup')} 
+              onClick={() => handleLogin('redirect')} 
               disabled={isLoggingIn}
               className="h-24 text-2xl font-black bg-white text-slate-900 hover:bg-slate-100 rounded-[1.5rem] shadow-xl transition-all hover:scale-[1.02] active:scale-95"
             >
               {isLoggingIn ? <Loader2 className="mr-3 animate-spin" /> : <CheckCircle2 className="mr-3 text-blue-600" />}
-              SIGN IN WITH GOOGLE
+              STABLE REDIRECT LOGIN
             </Button>
 
             <Button 
               variant="outline"
-              onClick={() => handleLogin('redirect')} 
+              onClick={() => handleLogin('popup')} 
               disabled={isLoggingIn}
               className="h-16 text-xs font-black border-white/10 text-white/40 hover:text-white hover:bg-white/5 rounded-2xl tracking-[0.2em] uppercase"
             >
-              <ArrowRight className="mr-2 size-4" />
-              Use Redirect (Stable Fallback)
+              Try Popup Method (Experimental)
             </Button>
           </div>
-
-          {popupBlocked && (
-            <Alert className="bg-amber-500/10 border-amber-500/30 text-amber-400 rounded-2xl">
-              <AlertTriangle className="size-5" />
-              <AlertTitle className="font-black text-[10px] uppercase tracking-widest">Popup Blocked</AlertTitle>
-              <AlertDescription className="text-[11px] font-bold opacity-80 italic">
-                Your browser restricted the login window. Please use the <strong>Redirect Fallback</strong> button above.
-              </AlertDescription>
-            </Alert>
-          )}
 
           {unauthorizedDomain && (
             <Alert className="bg-red-500/10 border-red-500/30 text-red-400 rounded-2xl">
               <Globe className="size-5" />
               <AlertTitle className="font-black text-[10px] uppercase tracking-widest">Domain Unauthorized</AlertTitle>
               <AlertDescription className="text-[11px] font-bold mt-2">
-                Add <code className="bg-red-500/20 px-2 py-1 rounded text-white">{unauthorizedDomain}</code> to your Firebase authorized domains list.
+                Copy this URL: <code className="bg-red-500/20 px-2 py-1 rounded text-white">{unauthorizedDomain}</code> and add it to "Authorized Domains" in your Firebase Auth settings.
               </AlertDescription>
             </Alert>
           )}

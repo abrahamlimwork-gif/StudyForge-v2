@@ -14,7 +14,8 @@ import {
   Lock, 
   Plus, 
   AlertCircle,
-  ArrowRight
+  ArrowRight,
+  ShieldAlert
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
@@ -54,6 +55,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
       setFiles(googleFiles);
     } catch (error: any) {
       if (error.status === 401) {
+        console.warn("--- EXPLORER: Token expired (401) ---");
         setHasToken(false);
         localStorage.removeItem('google_access_token');
       } else {
@@ -70,19 +72,29 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     const checkRedirect = async () => {
       redirectCheckRef.current = true;
       try {
+        console.log("--- EXPLORER: Checking for redirect handshake ---");
         const result = await getRedirectResult(auth);
+        
         if (result) {
+          console.log("--- EXPLORER: Handshake captured! ---");
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
             localStorage.setItem('google_access_token', credential.accessToken);
             setHasToken(true);
             loadFiles(credential.accessToken);
+            toast({ title: "Workspace Linked", description: "Successfully synchronized with Google Drive." });
             return;
           }
         }
-        loadFiles();
+        
+        // No redirect result, check if we already have a token
+        const existingToken = localStorage.getItem('google_access_token');
+        if (existingToken) {
+          setHasToken(true);
+          loadFiles(existingToken);
+        }
       } catch (err) {
-        console.error("Explorer Redirect Error:", err);
+        console.error("--- EXPLORER REDIRECT ERROR ---", err);
         loadFiles();
       }
     };
@@ -94,11 +106,13 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     if (!auth) return;
     setLoading(true);
     try {
+      console.log("--- EXPLORER: Initiating secure redirect ---");
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       await setPersistence(auth, browserLocalPersistence);
       await signInWithRedirect(auth, provider);
     } catch (err: any) {
+      console.error("--- EXPLORER CONNECT ERROR ---", err);
       toast({ variant: 'destructive', title: 'Handshake Failed', description: err.message });
       setLoading(false);
     }
@@ -113,12 +127,14 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   if (apiError) {
     return (
       <div className="flex flex-col h-full bg-slate-950 p-8 items-center justify-center text-center space-y-6">
-        <AlertCircle className="size-12 text-red-500 opacity-50" />
+        <ShieldAlert className="size-12 text-red-500 opacity-50" />
         <div className="space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Sync Failure</p>
-          <p className="text-[9px] font-mono text-white/40 max-w-[200px] leading-relaxed">{apiError}</p>
+          <p className="text-[9px] font-mono text-white/40 max-w-[200px] leading-relaxed">
+            The Google API rejected the connection. You may need to re-authenticate.
+          </p>
         </div>
-        <Button variant="outline" onClick={() => loadFiles()} className="border-white/10 text-[9px] font-black uppercase tracking-widest h-10 px-6 rounded-xl">Retry Sync</Button>
+        <Button variant="outline" onClick={handleConnect} className="border-white/10 text-[9px] font-black uppercase tracking-widest h-10 px-6 rounded-xl">Re-Connect</Button>
       </div>
     );
   }
@@ -137,7 +153,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           </p>
         </div>
         <Button onClick={handleConnect} disabled={loading} className="w-full h-16 bg-blue-600 hover:bg-blue-500 rounded-[1.25rem] font-black uppercase text-xs shadow-2xl shadow-blue-600/20">
-          {loading ? <Loader2 className="animate-spin" /> : <><ArrowRight className="mr-2 h-4 w-4" /> Connect Workspace</>}
+          {loading ? <Loader2 className="animate-spin" /> : <><ArrowRight className="mr-2 h-4 w-4" /> Link Google Drive</>}
         </Button>
       </div>
     );
