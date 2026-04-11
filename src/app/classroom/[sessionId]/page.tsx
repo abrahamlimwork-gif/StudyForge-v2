@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -21,7 +20,8 @@ import {
   Radio,
   Gamepad2,
   Layout,
-  HardDrive
+  HardDrive,
+  CloudUpload
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleDriveExplorer } from '@/components/google-drive-explorer';

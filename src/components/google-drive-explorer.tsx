@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { fetchGoogleSlides } from '@/lib/google-api-utils';
+import { fetchGoogleSlides, uploadFileToDrive } from '@/lib/google-api-utils';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
 import { Input } from './ui/input';
@@ -17,7 +16,8 @@ import {
   ShieldCheck,
   HardDrive,
   FileUp,
-  X
+  X,
+  CloudUpload
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
@@ -29,6 +29,7 @@ interface GoogleFile {
   name: string;
   modifiedTime: string;
   isLocal?: boolean;
+  rawFile?: File;
 }
 
 export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: string) => void }) {
@@ -37,11 +38,11 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   const [loading, setLoading] = useState(false);
   const [devToken, setDevToken] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [syncingFileId, setSyncingFileId] = useState<string | null>(null);
   
   const { toast } = useToast();
   const auth = useAuth();
 
-  // Load saved dev token on mount
   useEffect(() => {
     const saved = localStorage.getItem('studyforge_dev_token');
     if (saved) setDevToken(saved);
@@ -72,7 +73,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     }
   }, [devToken, toast]);
 
-  // Drag and Drop Logic
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -96,11 +96,33 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
       id: `local-${f.name}-${Date.now()}`,
       name: f.name,
       modifiedTime: new Date().toISOString(),
-      isLocal: true
+      isLocal: true,
+      rawFile: f
     }));
 
     setLocalFiles(prev => [...newLocalFiles, ...prev]);
     toast({ title: 'Added to Local Library', description: `${validFiles.length} file(s) ready for HUD.` });
+  };
+
+  const handleSyncToDrive = async (localFile: GoogleFile) => {
+    const token = devToken || localStorage.getItem('google_access_token');
+    if (!token || !localFile.rawFile) {
+      toast({ variant: 'destructive', title: 'Action Required', description: 'Link Google Drive or use a Dev Token to sync.' });
+      return;
+    }
+
+    setSyncingFileId(localFile.id);
+    try {
+      await uploadFileToDrive(token, localFile.rawFile);
+      toast({ title: 'Cloud Sync Successful', description: `${localFile.name} is now in your Drive.` });
+      setLocalFiles(prev => prev.filter(f => f.id !== localFile.id));
+      loadFiles();
+    } catch (err: any) {
+      console.error("Sync Error:", err);
+      toast({ variant: 'destructive', title: 'Sync Failed', description: err.message });
+    } finally {
+      setSyncingFileId(null);
+    }
   };
 
   const handleConnectPopup = async () => {
@@ -127,7 +149,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
   return (
     <div className="flex flex-col h-full bg-slate-900/50">
-      {/* Dev Token Section */}
       <div className="p-4 border-b border-white/5 bg-blue-600/5 space-y-3">
         <label className="text-[9px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-2">
           <ShieldCheck className="h-3 w-3" /> Dev Token (Plan B Bypass)
@@ -145,7 +166,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         </div>
       </div>
 
-      {/* Drop Zone */}
       <div 
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
@@ -168,7 +188,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
       <ScrollArea className="flex-grow">
         <div className="p-4 space-y-6">
-          {/* Local Section */}
           {localFiles.length > 0 && (
             <div className="space-y-3">
               <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20 flex items-center gap-2">
@@ -176,19 +195,27 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
               </h3>
               {localFiles.map((file) => (
                 <div key={file.id} className="group relative">
-                  <button
-                    onClick={() => onFileSelect(file.id)}
-                    className="w-full text-left p-5 bg-blue-600/5 border border-blue-500/20 rounded-2xl flex items-center gap-4 hover:bg-blue-600/10 transition-all"
-                  >
-                    <FileText className="h-6 w-6 text-blue-400" />
-                    <div className="flex-grow min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-black truncate text-white uppercase">{file.name}</p>
-                        <Badge className="bg-blue-600 text-[8px] h-4 px-1">LOCAL</Badge>
+                  <div className="w-full text-left p-5 bg-blue-600/5 border border-blue-500/20 rounded-2xl flex items-center gap-4 hover:bg-blue-600/10 transition-all">
+                    <button onClick={() => onFileSelect(file.id)} className="flex-grow flex items-center gap-4 min-w-0">
+                      <FileText className="h-6 w-6 text-blue-400" />
+                      <div className="flex-grow min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-black truncate text-white uppercase">{file.name}</p>
+                          <Badge className="bg-blue-600 text-[8px] h-4 px-1">LOCAL</Badge>
+                        </div>
+                        <p className="text-[9px] font-mono text-white/20 uppercase mt-1">Ready for Sync</p>
                       </div>
-                      <p className="text-[9px] font-mono text-white/20 uppercase mt-1">Ready for Sync</p>
-                    </div>
-                  </button>
+                    </button>
+                    <Button 
+                      onClick={() => handleSyncToDrive(file)} 
+                      disabled={syncingFileId === file.id}
+                      size="icon" 
+                      variant="ghost" 
+                      className="h-8 w-8 text-blue-400 hover:text-white hover:bg-blue-600"
+                    >
+                      {syncingFileId === file.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
+                    </Button>
+                  </div>
                   <Button 
                     size="icon" 
                     variant="ghost" 
@@ -202,7 +229,6 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
             </div>
           )}
 
-          {/* Cloud Section */}
           <div className="space-y-3">
             <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20 flex items-center gap-2">
               <Presentation className="h-3 w-3" /> Cloud Archive

@@ -1,4 +1,3 @@
-
 /**
  * Utility functions for interacting with Google Drive and Slides APIs.
  */
@@ -25,6 +24,35 @@ export async function fetchGoogleSlides(accessToken: string) {
 
   const data = await response.json();
   return data.files || [];
+}
+
+/**
+ * Uploads a local file to Google Drive.
+ */
+export async function uploadFileToDrive(accessToken: string, file: File) {
+  const metadata = {
+    name: file.name,
+    mimeType: file.type || 'application/octet-stream',
+  };
+
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', file);
+
+  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: form,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Upload Error: ${response.status} - ${errorBody}`);
+  }
+
+  return await response.json();
 }
 
 /**
