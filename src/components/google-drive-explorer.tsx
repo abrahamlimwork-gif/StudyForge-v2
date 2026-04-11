@@ -12,12 +12,10 @@ import {
   Loader2, 
   RefreshCw, 
   Presentation, 
-  Plus, 
   UploadCloud,
   ShieldCheck,
   HardDrive,
   FileUp,
-  X,
   CloudUpload,
   Link
 } from 'lucide-react';
@@ -45,13 +43,22 @@ export function GoogleDriveExplorer({ onFileSelect }: GoogleDriveExplorerProps) 
   const [devToken, setDevToken] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [syncingFileId, setSyncingFileId] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const isProcessingRedirect = useRef(false);
   
   const { toast } = useToast();
   const auth = useAuth();
 
+  // Handle Hydration
+  useEffect(() => {
+    setMounted(true);
+    const saved = localStorage.getItem('studyforge_dev_token');
+    if (saved) setDevToken(saved);
+  }, []);
+
   // Load files helper
   const loadFiles = useCallback(async () => {
+    if (typeof window === 'undefined') return;
     const token = devToken || localStorage.getItem('google_access_token');
     if (!token) return;
 
@@ -96,10 +103,8 @@ export function GoogleDriveExplorer({ onFileSelect }: GoogleDriveExplorerProps) 
   }, [auth, toast, loadFiles]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('studyforge_dev_token');
-    if (saved) setDevToken(saved);
-    loadFiles();
-  }, [loadFiles]);
+    if (mounted) loadFiles();
+  }, [loadFiles, mounted]);
 
   const handleDevTokenChange = (val: string) => {
     setDevToken(val);
@@ -137,6 +142,7 @@ export function GoogleDriveExplorer({ onFileSelect }: GoogleDriveExplorerProps) 
   };
 
   const handleSyncToDrive = async (localFile: GoogleFile) => {
+    if (typeof window === 'undefined') return;
     const token = devToken || localStorage.getItem('google_access_token');
     if (!token || !localFile.rawFile) {
       toast({ variant: 'destructive', title: 'Sync Blocked', description: 'Link Drive first.' });
@@ -238,7 +244,7 @@ export function GoogleDriveExplorer({ onFileSelect }: GoogleDriveExplorerProps) 
             <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20 flex items-center gap-2">
               <Presentation className="h-3 w-3" /> Cloud Archive
             </h3>
-            {!localStorage.getItem('google_access_token') && !devToken && (
+            {mounted && !localStorage.getItem('google_access_token') && !devToken && (
               <Button 
                 onClick={handleConnectRedirect} 
                 className="w-full h-14 bg-slate-950 border border-blue-500/30 text-blue-400 font-black text-[10px] uppercase tracking-widest rounded-2xl"
