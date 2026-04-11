@@ -32,7 +32,11 @@ interface GoogleFile {
   rawFile?: File;
 }
 
-export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: string) => void }) {
+interface GoogleDriveExplorerProps {
+  onFileSelect: (id: string, file?: File) => void;
+}
+
+export function GoogleDriveExplorer({ onFileSelect }: GoogleDriveExplorerProps) {
   const [files, setFiles] = useState<GoogleFile[]>([]);
   const [localFiles, setLocalFiles] = useState<GoogleFile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -85,7 +89,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     setIsDragging(false);
     const droppedFiles = Array.from(e.dataTransfer.files);
     
-    const validFiles = droppedFiles.filter(f => f.name.endsWith('.pdf') || f.name.endsWith('.pptx'));
+    const validFiles = droppedFiles.filter(f => f.name.toLowerCase().endsWith('.pdf') || f.name.toLowerCase().endsWith('.pptx'));
     
     if (validFiles.length === 0) {
       toast({ variant: 'destructive', title: 'Invalid Format', description: 'Please drop .pdf or .pptx files.' });
@@ -196,7 +200,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
               {localFiles.map((file) => (
                 <div key={file.id} className="group relative">
                   <div className="w-full text-left p-5 bg-blue-600/5 border border-blue-500/20 rounded-2xl flex items-center gap-4 hover:bg-blue-600/10 transition-all">
-                    <button onClick={() => onFileSelect(file.id)} className="flex-grow flex items-center gap-4 min-w-0">
+                    <button onClick={() => onFileSelect(file.id, file.rawFile)} className="flex-grow flex items-center gap-4 min-w-0">
                       <FileText className="h-6 w-6 text-blue-400" />
                       <div className="flex-grow min-w-0">
                         <div className="flex items-center gap-2">

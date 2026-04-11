@@ -41,6 +41,7 @@ export default function PresenterDashboard() {
 
   const [hasCopied, setHasCopied] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [localFileUrl, setLocalFileUrl] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
@@ -72,6 +73,18 @@ export default function PresenterDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleFileSelect = (id: string, file?: File) => {
+    setSelectedFileId(id);
+    if (file) {
+      // Create a blob URL for local preview
+      const url = URL.createObjectURL(file);
+      setLocalFileUrl(url);
+      setSpeakerNotes(["Local Mode Active", "Browser controls handle navigation for local files."]);
+    } else {
+      setLocalFileUrl(null);
+    }
+  };
+
   useEffect(() => {
     if (selectedFileId && !isLocalFile) {
       const token = localStorage.getItem('studyforge_dev_token') || localStorage.getItem('google_access_token');
@@ -88,8 +101,8 @@ export default function PresenterDashboard() {
           })
           .finally(() => setLoadingNotes(false));
       }
-    } else {
-      setSpeakerNotes(isLocalFile ? ["Local Mode Active", "Teleprompter sync requires cloud sync."] : []);
+    } else if (!isLocalFile) {
+      setSpeakerNotes([]);
       setCurrentSlideIndex(0);
     }
   }, [selectedFileId, isLocalFile]);
@@ -232,7 +245,7 @@ export default function PresenterDashboard() {
           "bg-slate-900 flex flex-col border-r border-white/5 transition-all duration-300 ease-in-out",
           isLibraryVisible ? "w-1/4 min-w-[350px]" : "w-0 min-w-0 overflow-hidden"
         )}>
-          <GoogleDriveExplorer key={refreshKey} onFileSelect={setSelectedFileId} />
+          <GoogleDriveExplorer key={refreshKey} onFileSelect={handleFileSelect} />
         </aside>
 
         <section className="flex-grow bg-black flex flex-col relative overflow-hidden">
@@ -254,17 +267,11 @@ export default function PresenterDashboard() {
             <div className="flex-grow flex flex-col">
               <div className="flex-grow relative bg-slate-950 flex items-center justify-center">
                 {isLocalFile ? (
-                  <div className="text-center space-y-8 p-12 max-w-lg">
-                    <div className="bg-blue-600/10 p-12 rounded-[3rem] border border-blue-500/20 inline-block">
-                      <HardDrive className="size-20 text-blue-500 animate-pulse" />
-                    </div>
-                    <div className="space-y-4">
-                      <h2 className="text-3xl font-black uppercase tracking-tighter">Local Mode Active</h2>
-                      <p className="text-sm text-white/40 leading-relaxed">
-                        This file is stored in your browser session. Sync to your Google Drive to enable cloud embedding and audience tracking.
-                      </p>
-                    </div>
-                  </div>
+                  <iframe 
+                    src={localFileUrl!} 
+                    className="w-full h-full border-none bg-white" 
+                    title="Local File Viewer"
+                  />
                 ) : (
                   <iframe src={slidesUrl!} className="w-full h-full border-none" allowFullScreen />
                 )}
@@ -343,7 +350,7 @@ export default function PresenterDashboard() {
             <Clock className="h-3 w-3" /> {currentTime || '--:--:--'}
           </span>
         </div>
-        <div className="text-[9px] font-black text-white/10 uppercase tracking-[0.4em]">StudyForge v3.5 • PLAN B ACTIVE</div>
+        <div className="text-[9px] font-black text-white/10 uppercase tracking-[0.4em]">StudyForge v3.5 • HYBRID ACTIVE</div>
       </footer>
     </div>
   );
