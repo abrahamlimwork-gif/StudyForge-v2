@@ -1,38 +1,66 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth, useUser } from '@/firebase';
 import { 
   GoogleAuthProvider, 
   setPersistence, 
   browserLocalPersistence,
-  signInWithPopup
+  signInWithRedirect,
+  getRedirectResult
 } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, ShieldCheck, CheckCircle2, AlertTriangle, Globe } from 'lucide-react';
+import { Loader2, ShieldCheck, CheckCircle2, AlertTriangle, Globe, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const isProcessing = useRef(false);
   
   const router = useRouter();
   const { toast } = useToast();
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
 
+  // Handle Redirect Result on Mount
+  useEffect(() => {
+    if (!auth || isProcessing.current) return;
+    isProcessing.current = true;
+
+    const captureRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            localStorage.setItem('google_access_token', credential.accessToken);
+          }
+          toast({ title: "Login Successful", description: "Identity synchronized." });
+          router.replace('/dashboard');
+        }
+      } catch (err: any) {
+        console.error("Redirect Capture Error:", err);
+        setError(err.message);
+      }
+    };
+
+    captureRedirect();
+  }, [auth, router, toast]);
+
+  // Automatic redirect if already logged in
   useEffect(() => {
     if (!isUserLoading && user) {
       router.replace('/dashboard');
     }
   }, [user, isUserLoading, router]);
 
-  const handlePopupLogin = async () => {
+  const handleRedirectLogin = async () => {
     if (!auth) return;
     setError(null);
     setUnauthorizedDomain(null);
@@ -43,29 +71,13 @@ export default function LoginPage() {
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.setCustomParameters({ prompt: 'select_account' });
       
-      // Ensure persistence is set before login
       await setPersistence(auth, browserLocalPersistence);
-      
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      
-      if (credential?.accessToken) {
-        localStorage.setItem('google_access_token', credential.accessToken);
-      }
-      
-      toast({ title: "Login Successful", description: "Workspace access granted." });
-      router.replace('/dashboard');
+      await signInWithRedirect(auth, provider);
+      // Browser will redirect now...
     } catch (err: any) {
-      console.error("--- LOGIN POPUP ERROR ---", err.code, err.message);
-      
+      console.error("Login Error:", err.code, err.message);
       if (err.code === 'auth/unauthorized-domain') {
         setUnauthorizedDomain(window.location.hostname);
-      } else if (err.code === 'auth/popup-closed-by-user') {
-        toast({ 
-          variant: "destructive", 
-          title: "Popup Blocked", 
-          description: "Check your browser settings for pop-up blockers or try again." 
-        });
       } else {
         setError(err.message);
       }
@@ -77,7 +89,7 @@ export default function LoginPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center space-y-8">
         <Loader2 className="size-24 animate-spin text-blue-500 opacity-50" />
-        <p className="text-blue-400 font-bold uppercase text-[10px] tracking-[0.3em]">Synchronizing Identity...</p>
+        <p className="text-blue-400 font-bold uppercase text-[10px] tracking-[0.3em]">Checking Session...</p>
       </div>
     );
   }
@@ -99,12 +111,13 @@ export default function LoginPage() {
 
         <CardContent className="space-y-6 p-12 pt-0">
           <Button 
-            onClick={handlePopupLogin} 
+            onClick={handleRedirectLogin} 
             disabled={isLoggingIn}
-            className="w-full h-20 text-xl font-black bg-white text-slate-900 hover:bg-slate-100 rounded-[1.5rem] shadow-xl"
+            className="w-full h-20 text-xl font-black bg-white text-slate-900 hover:bg-slate-100 rounded-[1.5rem] shadow-xl group"
           >
             {isLoggingIn ? <Loader2 className="mr-3 animate-spin" /> : <CheckCircle2 className="mr-3 text-blue-600" />}
-            POPUP LOGIN
+            STABLE REDIRECT LOGIN
+            <ArrowRight className="ml-2 size-5 transition-transform group-hover:translate-x-1" />
           </Button>
 
           {unauthorizedDomain && (
