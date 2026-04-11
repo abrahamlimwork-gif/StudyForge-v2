@@ -7,6 +7,7 @@ import {
   GoogleAuthProvider, 
   setPersistence, 
   browserLocalPersistence,
+  signInWithPopup,
   signInWithRedirect,
   getRedirectResult
 } from 'firebase/auth';
@@ -15,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, ShieldCheck, Globe, CheckCircle2 } from 'lucide-react';
+import { Loader2, ShieldCheck, Globe, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -35,22 +36,22 @@ export default function LoginPage() {
     const captureRedirect = async () => {
       redirectHandled.current = true;
       try {
+        console.log("--- AUTH DEBUG: Checking Redirect Result ---");
         const result = await getRedirectResult(auth);
         if (result) {
+          console.log("--- AUTH DEBUG: Redirect Success ---");
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
             localStorage.setItem('google_access_token', credential.accessToken);
           }
-          toast({ 
-            title: "Identity Verified", 
-            description: "Workspace handshake complete. Synchronizing archive...",
-          });
+          toast({ title: "Identity Verified", description: "Workspace synced via redirect." });
           router.replace('/dashboard');
         } else {
+          console.log("--- AUTH DEBUG: No pending redirect ---");
           setIsProcessingRedirect(false);
         }
       } catch (err: any) {
-        console.error("--- LOGIN REDIRECT ERROR ---", err);
+        console.error("--- AUTH DEBUG: Redirect Error ---", err.code, err.message);
         if (err.code === 'auth/unauthorized-domain') {
           setUnauthorizedDomain(window.location.hostname);
         } else {
@@ -69,9 +70,8 @@ export default function LoginPage() {
     }
   }, [user, isUserLoading, router, isProcessingRedirect]);
 
-  const handleLogin = async () => {
+  const handlePopupLogin = async () => {
     if (!auth) return;
-    
     setError(null);
     setUnauthorizedDomain(null);
     setIsLoggingIn(true);
@@ -82,14 +82,42 @@ export default function LoginPage() {
       provider.setCustomParameters({ prompt: 'select_account' });
       
       await setPersistence(auth, browserLocalPersistence);
-      await signInWithRedirect(auth, provider);
+      console.log("--- AUTH DEBUG: Attempting Popup ---");
+      const result = await signInWithPopup(auth, provider);
+      
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        localStorage.setItem('google_access_token', credential.accessToken);
+      }
+      
+      toast({ title: "Login Successful", description: "Workspace access granted." });
+      router.replace('/dashboard');
     } catch (err: any) {
-      console.error("--- LOGIN ERROR ---", err);
+      console.error("--- AUTH DEBUG: Popup Error ---");
+      console.error("Code:", err.code);
+      console.error("Message:", err.message);
+      console.dir(err.customData);
+      
       if (err.code === 'auth/unauthorized-domain') {
         setUnauthorizedDomain(window.location.hostname);
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        toast({ variant: "destructive", title: "Popup Closed", description: "The login window was closed before completion." });
       } else {
         setError(err.message);
       }
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleRedirectLogin = async () => {
+    if (!auth) return;
+    setIsLoggingIn(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('https://www.googleapis.com/auth/drive.file');
+      await signInWithRedirect(auth, provider);
+    } catch (err: any) {
+      setError(err.message);
       setIsLoggingIn(false);
     }
   };
@@ -98,10 +126,7 @@ export default function LoginPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center space-y-8">
         <Loader2 className="size-24 animate-spin text-blue-500 opacity-50" />
-        <div className="space-y-2">
-          <h1 className="text-4xl font-black text-white uppercase tracking-tighter">Syncing Workspace</h1>
-          <p className="text-blue-400 font-bold uppercase text-[10px] tracking-[0.3em]">Validating Security Handshake</p>
-        </div>
+        <p className="text-blue-400 font-bold uppercase text-[10px] tracking-[0.3em]">Synchronizing Identity...</p>
       </div>
     );
   }
@@ -118,35 +143,43 @@ export default function LoginPage() {
             </div>
           </div>
           <CardTitle className="text-6xl font-black uppercase tracking-tighter">STUDYFORGE</CardTitle>
-          <CardDescription className="text-xl font-bold text-slate-400 mt-2">
-            Presenter Workspace Login
-          </CardDescription>
+          <CardDescription className="text-xl font-bold text-slate-400 mt-2">Presenter Workspace</CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-8 p-12 pt-0">
+        <CardContent className="space-y-6 p-12 pt-0">
           <Button 
-            onClick={handleLogin} 
+            onClick={handlePopupLogin} 
             disabled={isLoggingIn}
-            className="w-full h-24 text-2xl font-black bg-white text-slate-900 hover:bg-slate-100 rounded-[1.5rem] shadow-xl transition-all hover:scale-[1.02] active:scale-95"
+            className="w-full h-20 text-xl font-black bg-white text-slate-900 hover:bg-slate-100 rounded-[1.5rem] shadow-xl"
           >
             {isLoggingIn ? <Loader2 className="mr-3 animate-spin" /> : <CheckCircle2 className="mr-3 text-blue-600" />}
-            STABLE REDIRECT LOGIN
+            POPUP LOGIN
+          </Button>
+
+          <Button 
+            onClick={handleRedirectLogin} 
+            disabled={isLoggingIn}
+            variant="outline"
+            className="w-full h-16 text-xs font-black border-white/10 hover:bg-white/5 text-white/40 uppercase tracking-widest rounded-[1.5rem]"
+          >
+            STABLE REDIRECT (FALLBACK)
           </Button>
 
           {unauthorizedDomain && (
-            <Alert className="bg-red-500/10 border-red-500/30 text-red-400 rounded-2xl">
+            <Alert variant="destructive" className="bg-red-500/10 border-red-500/30 text-red-400 rounded-2xl">
               <Globe className="size-5" />
-              <AlertTitle className="font-black text-[10px] uppercase tracking-widest">Domain Unauthorized</AlertTitle>
+              <AlertTitle className="font-black text-[10px] uppercase tracking-widest">Unauthorized Domain</AlertTitle>
               <AlertDescription className="text-[11px] font-bold mt-2">
-                Copy this URL: <code className="bg-red-500/20 px-2 py-1 rounded text-white">{unauthorizedDomain}</code> and add it to "Authorized Domains" in your Firebase Auth settings.
+                Add <code className="bg-red-500/20 px-2 py-1 rounded text-white">{unauthorizedDomain}</code> to your Firebase Auth "Authorized Domains" settings.
               </AlertDescription>
             </Alert>
           )}
 
           {error && (
-            <p className="text-center text-[10px] font-mono text-red-400 bg-red-500/5 p-4 rounded-xl border border-red-500/20">
-              {error}
-            </p>
+            <div className="flex items-start gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-xl">
+              <AlertTriangle className="size-4 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-[10px] font-mono text-red-400">{error}</p>
+            </div>
           )}
         </CardContent>
       </Card>

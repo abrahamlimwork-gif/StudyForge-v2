@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchGoogleSlides } from '@/lib/google-api-utils';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -13,14 +13,12 @@ import {
   Presentation, 
   Lock, 
   Plus, 
-  AlertCircle,
   ArrowRight,
   ShieldAlert
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
-import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { cn } from '@/lib/utils';
+import { GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from 'firebase/auth';
 
 interface GoogleFile {
   id: string;
@@ -37,9 +35,8 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   
   const { toast } = useToast();
   const auth = useAuth();
-  const redirectProcessed = useRef(false);
 
-  const loadFiles = async (token?: string) => {
+  const loadFiles = useCallback(async (token?: string) => {
     const accessToken = token || localStorage.getItem('google_access_token');
     if (!accessToken) {
       setHasToken(false);
@@ -56,12 +53,13 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     } catch (error: any) {
       console.error("--- EXPLORER ERROR ---", error);
       if (error.status === 401) {
+        console.warn("--- EXPLORER: Token expired (401), clearing... ---");
         setHasToken(false);
         localStorage.removeItem('google_access_token');
         toast({ 
           variant: "destructive", 
           title: "Session Expired", 
-          description: "Please re-link your Google Drive to continue." 
+          description: "Please re-link Google Drive." 
         });
       } else {
         setApiError(error.body || error.message);
@@ -69,56 +67,43 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    if (!auth || redirectProcessed.current) return;
+    const existingToken = localStorage.getItem('google_access_token');
+    if (existingToken) {
+      setHasToken(true);
+      loadFiles(existingToken);
+    }
+  }, [loadFiles]);
 
-    const handleRedirectResult = async () => {
-      redirectProcessed.current = true;
-      try {
-        const result = await getRedirectResult(auth);
-        if (result) {
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          if (credential?.accessToken) {
-            localStorage.setItem('google_access_token', credential.accessToken);
-            setHasToken(true);
-            loadFiles(credential.accessToken);
-            toast({ title: "Workspace Linked", description: "Successfully synchronized with Google Drive." });
-            return;
-          }
-        }
-        
-        // No redirect result found, check for existing valid token
-        const existingToken = localStorage.getItem('google_access_token');
-        if (existingToken) {
-          setHasToken(true);
-          loadFiles(existingToken);
-        }
-      } catch (err: any) {
-        console.error("--- REDIRECT ERROR ---", err);
-        if (err.code === 'auth/unauthorized-domain') {
-          setApiError(`Unauthorized domain: ${window.location.hostname}. Please add this to Firebase authorized domains.`);
-        }
-      }
-    };
-
-    handleRedirectResult();
-  }, [auth]);
-
-  const handleConnect = async () => {
+  const handleConnectPopup = async () => {
     if (!auth) return;
     setLoading(true);
+    setApiError(null);
     try {
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.setCustomParameters({ prompt: 'select_account' });
       
       await setPersistence(auth, browserLocalPersistence);
-      await signInWithRedirect(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        localStorage.setItem('google_access_token', credential.accessToken);
+        setHasToken(true);
+        loadFiles(credential.accessToken);
+        toast({ title: "Workspace Linked", description: "Successfully synced with Google Drive." });
+      }
     } catch (err: any) {
-      console.error("--- CONNECT ERROR ---", err);
-      toast({ variant: 'destructive', title: 'Connection Failed', description: err.message });
+      console.error("--- CONNECT POPUP ERROR ---", err.code, err.message);
+      if (err.code === 'auth/popup-closed-by-user') {
+        toast({ title: "Login Cancelled", description: "Popup was closed before syncing." });
+      } else {
+        setApiError(err.message);
+      }
+    } finally {
       setLoading(false);
     }
   };
@@ -135,11 +120,11 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         <ShieldAlert className="size-12 text-red-500 opacity-50" />
         <div className="space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Sync Failure</p>
-          <p className="text-[9px] font-mono text-white/40 max-w-[200px] leading-relaxed italic">
+          <p className="text-[9px] font-mono text-white/40 max-w-[200px] leading-relaxed italic truncate">
             {apiError}
           </p>
         </div>
-        <Button variant="outline" onClick={handleConnect} className="border-white/10 text-[9px] font-black uppercase tracking-widest h-10 px-6 rounded-xl">Re-Connect</Button>
+        <Button variant="outline" onClick={handleConnectPopup} className="border-white/10 text-[9px] font-black uppercase tracking-widest h-10 px-6 rounded-xl">Re-Connect</Button>
       </div>
     );
   }
@@ -147,18 +132,15 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   if (!hasToken) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-12 text-center space-y-8 bg-slate-950">
-        <div className="relative">
-          <Lock className="size-20 text-blue-500 opacity-10" />
-          <Loader2 className="absolute inset-0 size-20 text-blue-500/20 animate-spin-slow" />
-        </div>
+        <Lock className="size-20 text-blue-500 opacity-10" />
         <div className="space-y-4">
-          <h3 className="text-xl font-black uppercase tracking-tighter text-white/90">Workspace Locked</h3>
+          <h3 className="text-xl font-black uppercase tracking-tighter text-white/90">Library Locked</h3>
           <p className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] leading-relaxed">
-            Link your Google account to access your sermon archive.
+            Connect Google Drive to access your archive.
           </p>
         </div>
-        <Button onClick={handleConnect} disabled={loading} className="w-full h-16 bg-blue-600 hover:bg-blue-500 rounded-[1.25rem] font-black uppercase text-xs shadow-2xl shadow-blue-600/20">
-          {loading ? <Loader2 className="animate-spin" /> : <><ArrowRight className="mr-2 h-4 w-4" /> Sync Drive</>}
+        <Button onClick={handleConnectPopup} disabled={loading} className="w-full h-16 bg-blue-600 hover:bg-blue-500 rounded-[1.25rem] font-black uppercase text-xs shadow-2xl">
+          {loading ? <Loader2 className="animate-spin" /> : <><ArrowRight className="mr-2 h-4 w-4" /> Link Workspace</>}
         </Button>
       </div>
     );
@@ -178,7 +160,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
       <div className="p-4 flex gap-2">
         <Input 
           placeholder="Slide ID..." 
-          className="h-12 text-xs bg-black/40 border-white/10 text-white font-mono rounded-xl focus:ring-blue-500/20"
+          className="h-12 text-xs bg-black/40 border-white/10 text-white font-mono rounded-xl"
           value={manualId}
           onChange={(e) => setManualId(e.target.value)}
         />
@@ -189,23 +171,15 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
       <ScrollArea className="flex-grow">
         <div className="p-4 space-y-3">
-          {files.length === 0 && !loading && (
-            <div className="py-20 text-center space-y-4 opacity-10">
-              <FileText className="size-16 mx-auto" />
-              <p className="text-[10px] font-black uppercase tracking-widest">No Slides Found</p>
-            </div>
-          )}
           {files.map((file) => (
             <button
               key={file.id}
               onClick={() => onFileSelect(file.id)}
               className="w-full text-left p-5 bg-white/5 border border-white/5 rounded-2xl flex items-center gap-4 hover:bg-blue-600/20 hover:border-blue-500/30 transition-all group"
             >
-              <div className="bg-blue-500/10 p-3 rounded-xl group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                <FileText className="h-6 w-6 text-blue-500 group-hover:text-white" />
-              </div>
+              <FileText className="h-6 w-6 text-blue-500" />
               <div className="flex-grow min-w-0">
-                <p className="text-sm font-black truncate text-white/90 group-hover:text-white uppercase tracking-tight">{file.name}</p>
+                <p className="text-sm font-black truncate text-white/90 uppercase tracking-tight">{file.name}</p>
                 <p className="text-[9px] font-mono text-white/20 uppercase mt-1">Modified {new Date(file.modifiedTime).toLocaleDateString()}</p>
               </div>
             </button>
