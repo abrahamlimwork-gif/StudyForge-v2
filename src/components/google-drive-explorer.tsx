@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchGoogleSlides, getOrCreateLibraryFolder, uploadFileToDrive } from '@/lib/google-api-utils';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -15,6 +15,7 @@ import {
   Lock, 
   Plus, 
   UploadCloud,
+  Bug,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/firebase';
@@ -34,10 +35,12 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   const [dragActive, setDragActive] = useState(false);
   const [hasToken, setHasToken] = useState(false);
   const [apiError, setApiError] = useState<{ status: number; body: string } | null>(null);
+  const [debugLog, setDebugLog] = useState<string | null>(null);
   const [manualId, setManualId] = useState('');
   
   const { toast } = useToast();
   const auth = useAuth();
+  const hasCheckedRedirect = useRef(false);
 
   const loadFiles = async (token?: string) => {
     const accessToken = token || localStorage.getItem('google_access_token');
@@ -74,42 +77,46 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   };
 
   useEffect(() => {
-    if (!auth) return;
+    if (!auth || hasCheckedRedirect.current) return;
+    hasCheckedRedirect.current = true;
 
     const checkRedirect = async () => {
       try {
-        console.log("Explorer: checking redirect result...");
+        console.log("--- EXPLORER DEBUG: Checking Redirect ---");
         const result = await getRedirectResult(auth);
         if (result) {
-          console.log("Explorer: found redirect result!");
+          console.log("--- EXPLORER DEBUG: Found Redirect Credentials ---");
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
             localStorage.setItem('google_access_token', credential.accessToken);
             setHasToken(true);
             loadFiles(credential.accessToken);
           }
+        } else {
+          console.log("--- EXPLORER DEBUG: No pending redirect result ---");
+          loadFiles(); // Try with existing token
         }
       } catch (err: any) {
-        console.error("--- DEBUG EXPLORER ERROR ---");
-        console.error("Code:", err.code);
-        console.error("Msg:", err.message);
+        console.error("--- EXPLORER DEBUG: Redirect Catch ---", err.code);
+        setDebugLog(`Code: ${err.code}\nMsg: ${err.message}`);
       }
     };
 
     checkRedirect();
-    loadFiles();
   }, [auth]);
 
   const handleConnect = async (method: 'popup' | 'redirect' = 'popup') => {
     if (!auth) return;
     
     setLoading(true);
+    setDebugLog(null);
     try {
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.setCustomParameters({ prompt: 'select_account' });
       
       if (method === 'popup') {
+        console.log("--- EXPLORER DEBUG: Attempting Popup ---");
         const result = await signInWithPopup(auth, provider);
         const credential = GoogleAuthProvider.credentialFromResult(result);
         if (credential?.accessToken) {
@@ -118,19 +125,19 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           loadFiles(credential.accessToken);
         }
       } else {
+        console.log("--- EXPLORER DEBUG: Starting Redirect flow ---");
         await signInWithRedirect(auth, provider);
       }
     } catch (err: any) {
-      console.error("--- DEBUG CONNECT ERROR ---");
-      console.error("Code:", err.code);
-      console.error("Msg:", err.message);
+      console.error("--- EXPLORER DEBUG: Connect Error ---", err.code);
+      setDebugLog(`Code: ${err.code}\nMsg: ${err.message}`);
       
       toast({
         variant: 'destructive',
         title: 'Connection Failed',
         description: err.code === 'auth/popup-closed-by-user' 
-          ? 'Popup blocked. Try Redirect fallback.'
-          : 'Could not link Google account.',
+          ? 'Popup blocked. Use Redirect fallback.'
+          : 'Check console for debug info.',
       });
     } finally {
       setLoading(false);
@@ -231,6 +238,14 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           >
             Use Redirect (Fallback)
           </Button>
+          {debugLog && (
+            <div className="mt-4 p-4 bg-black/40 rounded-xl border border-blue-500/20 text-left font-mono text-[8px] text-blue-300">
+              <div className="flex items-center gap-2 mb-2 uppercase font-black tracking-widest opacity-50">
+                <Bug className="size-3" /> Debug Log
+              </div>
+              <pre className="whitespace-pre-wrap">{debugLog}</pre>
+            </div>
+          )}
         </div>
       </div>
     );

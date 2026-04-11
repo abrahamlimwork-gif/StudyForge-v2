@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth, useUser } from '@/firebase';
 import { 
   GoogleAuthProvider, 
@@ -15,12 +15,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { InfoIcon, Loader2, ShieldCheck, Globe, AlertTriangle, ArrowRight } from 'lucide-react';
+import { InfoIcon, Loader2, ShieldCheck, Globe, AlertTriangle, ArrowRight, Bug } from 'lucide-react';
 
 export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isProcessingRedirect, setIsProcessingRedirect] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
   const [isPopupClosed, setIsPopupClosed] = useState(false);
   const [useRedirect, setUseRedirect] = useState(false);
@@ -29,37 +30,41 @@ export default function LoginPage() {
   const { toast } = useToast();
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
+  const hasCheckedRedirect = useRef(false);
 
   useEffect(() => {
-    if (!auth) return;
+    if (!auth || hasCheckedRedirect.current) return;
+    hasCheckedRedirect.current = true;
 
     const handleRedirectResult = async () => {
       try {
-        console.log("Checking for Redirect Result...");
+        console.log("--- AUTH DEBUG: Checking Redirect Result ---");
         const result = await getRedirectResult(auth);
+        
         if (result) {
-          console.log("Redirect Result Found:", result.user.email);
+          console.log("--- AUTH DEBUG: Redirect Success ---", result.user.email);
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
             localStorage.setItem('google_access_token', credential.accessToken);
           }
           router.replace('/dashboard');
         } else {
-          console.log("No redirect result found.");
+          console.log("--- AUTH DEBUG: No redirect result found. ---");
+          setIsProcessingRedirect(false);
         }
       } catch (err: any) {
-        // DEBUG THE REAL ERROR
-        console.error("--- DEBUG REDIRECT ERROR ---");
-        console.error("Error Code:", err.code);
-        console.error("Error Message:", err.message);
-        console.error("Custom Data:", err.customData);
+        console.error("--- AUTH DEBUG: Redirect Error ---");
+        console.error("Code:", err.code);
+        console.error("Msg:", err.message);
+        console.error("Data:", err.customData);
         
+        setDebugInfo({ code: err.code, message: err.message });
+
         if (err.code === 'auth/unauthorized-domain') {
           setIsUnauthorizedDomain(true);
         } else {
           setError(err.message);
         }
-      } finally {
         setIsProcessingRedirect(false);
       }
     };
@@ -77,6 +82,7 @@ export default function LoginPage() {
     if (!auth) return;
     
     setError(null);
+    setDebugInfo(null);
     setIsUnauthorizedDomain(false);
     setIsPopupClosed(false);
     setIsLoggingIn(true);
@@ -89,7 +95,7 @@ export default function LoginPage() {
       await setPersistence(auth, browserLocalPersistence);
 
       if (method === 'popup') {
-        console.log("Attempting Popup Login...");
+        console.log("--- AUTH DEBUG: Attempting Popup ---");
         const result = await signInWithPopup(auth, provider);
         const credential = GoogleAuthProvider.credentialFromResult(result);
         if (credential?.accessToken) {
@@ -97,16 +103,18 @@ export default function LoginPage() {
         }
         router.push('/dashboard');
       } else {
-        console.log("Attempting Redirect Login...");
+        console.log("--- AUTH DEBUG: Attempting Redirect ---");
+        setUseRedirect(true);
         await signInWithRedirect(auth, provider);
       }
       
     } catch (err: any) {
-      // DEBUG THE REAL ERROR
-      console.error("--- DEBUG LOGIN ERROR ---");
-      console.error("Error Code:", err.code);
-      console.error("Error Message:", err.message);
-      console.error("Custom Data:", err.customData);
+      console.error("--- AUTH DEBUG: Login Exception ---");
+      console.error("Code:", err.code);
+      console.error("Msg:", err.message);
+      console.error("Data:", err.customData);
+
+      setDebugInfo({ code: err.code, message: err.message, data: err.customData });
 
       if (err.code === 'auth/unauthorized-domain') {
         setIsUnauthorizedDomain(true);
@@ -121,7 +129,7 @@ export default function LoginPage() {
     }
   };
 
-  if (isUserLoading || isProcessingRedirect || (user && !isProcessingRedirect)) {
+  if (isUserLoading || isProcessingRedirect) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center space-y-6">
         <Loader2 className="size-20 animate-spin text-blue-500" />
@@ -188,7 +196,7 @@ export default function LoginPage() {
                 <AlertTriangle className="size-6" />
                 <AlertTitle className="text-sm font-black uppercase tracking-widest mb-2">Browser Restriction</AlertTitle>
                 <AlertDescription className="text-xs leading-relaxed italic">
-                  Popup was blocked. Please use the **Redirect (Stable Fallback)** button for a guaranteed login.
+                  Popup was blocked or closed. Please use the **Redirect (Stable Fallback)** button for a guaranteed login.
                 </AlertDescription>
               </Alert>
             )}
@@ -203,7 +211,18 @@ export default function LoginPage() {
               </Alert>
             )}
 
-            {error && (
+            {debugInfo && (
+              <Alert className="bg-slate-800/50 border-blue-500/20 text-blue-400 p-4 rounded-xl font-mono text-[10px]">
+                <Bug className="size-4 mb-2" />
+                <AlertTitle className="uppercase font-black tracking-widest mb-1">Raw Error Debug</AlertTitle>
+                <div className="space-y-1">
+                  <p>CODE: {debugInfo.code}</p>
+                  <p>MSG: {debugInfo.message}</p>
+                </div>
+              </Alert>
+            )}
+
+            {error && !isUnauthorizedDomain && (
               <Alert variant="destructive" className="border-red-500/50 bg-red-500/10 text-red-400">
                 <InfoIcon className="size-6" />
                 <AlertTitle className="text-xl font-black uppercase">Authentication Error</AlertTitle>
