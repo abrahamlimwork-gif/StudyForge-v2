@@ -20,7 +20,8 @@ import {
   FileText,
   Radio,
   Gamepad2,
-  Layout
+  Layout,
+  HardDrive
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleDriveExplorer } from '@/components/google-drive-explorer';
@@ -49,24 +50,21 @@ export default function PresenterDashboard() {
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [isAudienceLive, setIsAudienceLive] = useState(false);
 
-  // Reference to track the audience window
   const audienceWindowRef = useRef<Window | null>(null);
-
-  // Sidebar visibility states
   const [isLibraryVisible, setIsLibraryVisible] = useState(true);
   const [isNotesVisible, setIsNotesVisible] = useState(true);
 
+  const isLocalFile = selectedFileId?.startsWith('local-');
+
   useEffect(() => {
     setCurrentTime(new Date().toLocaleTimeString());
-    const timer = setInterval(() => {
-      setCurrentTime(new Date().toLocaleTimeString());
-    }, 1000);
+    const timer = setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
     const checkStatus = () => {
-      const token = localStorage.getItem('google_access_token');
+      const token = localStorage.getItem('studyforge_dev_token') || localStorage.getItem('google_access_token');
       setIsGoogleConnected(!!token);
     };
     checkStatus();
@@ -74,10 +72,9 @@ export default function PresenterDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch speaker notes when a file is selected
   useEffect(() => {
-    if (selectedFileId && isGoogleConnected) {
-      const token = localStorage.getItem('google_access_token');
+    if (selectedFileId && !isLocalFile) {
+      const token = localStorage.getItem('studyforge_dev_token') || localStorage.getItem('google_access_token');
       if (token) {
         setLoadingNotes(true);
         fetchSpeakerNotes(token, selectedFileId)
@@ -87,32 +84,28 @@ export default function PresenterDashboard() {
           })
           .catch(err => {
             console.error("Notes Error:", err);
-            setSpeakerNotes([]);
+            setSpeakerNotes(["(Note extraction failed or not available for this file)"]);
           })
           .finally(() => setLoadingNotes(false));
       }
     } else {
-      setSpeakerNotes([]);
+      setSpeakerNotes(isLocalFile ? ["Local Mode Active", "Teleprompter sync requires cloud sync."] : []);
       setCurrentSlideIndex(0);
     }
-  }, [selectedFileId, isGoogleConnected]);
+  }, [selectedFileId, isLocalFile]);
 
-  // Sync the iframe URL with the current slide index
   const slidesUrl = useMemo(() => {
-    if (!selectedFileId) return null;
+    if (!selectedFileId || isLocalFile) return null;
     return `https://docs.google.com/presentation/d/${selectedFileId}/embed?rm=minimal&slide=id.p${currentSlideIndex + 1}`;
-  }, [selectedFileId, currentSlideIndex]);
+  }, [selectedFileId, currentSlideIndex, isLocalFile]);
 
-  // Audience view URL
   const audienceUrl = useMemo(() => {
-    if (!selectedFileId) return null;
+    if (!selectedFileId || isLocalFile) return null;
     return `https://docs.google.com/presentation/d/${selectedFileId}/present?rm=minimal&slide=id.p${currentSlideIndex + 1}`;
-  }, [selectedFileId, currentSlideIndex]);
+  }, [selectedFileId, currentSlideIndex, isLocalFile]);
 
-  // Sync Audience Window whenever the slide index changes
   useEffect(() => {
     if (isAudienceLive && audienceUrl) {
-      // Re-opening with the same window name ('StudyForgeAudience') updates the existing window
       audienceWindowRef.current = window.open(audienceUrl, 'StudyForgeAudience');
     }
   }, [currentSlideIndex, isAudienceLive, audienceUrl]);
@@ -123,18 +116,18 @@ export default function PresenterDashboard() {
   const copyInviteLink = () => {
     navigator.clipboard.writeText(jitsiUrl);
     setHasCopied(true);
-    toast({ title: "Invite Link Copied!", description: "Share this URL with your participants." });
+    toast({ title: "Invite Link Copied!" });
     setTimeout(() => setHasCopied(false), 2000);
   };
 
   const handleLaunchAudience = () => {
+    if (isLocalFile) {
+      toast({ variant: 'destructive', title: 'Action Unavailable', description: 'Local files cannot be slaved to the audience view yet.' });
+      return;
+    }
     if (audienceUrl) {
       audienceWindowRef.current = window.open(audienceUrl, 'StudyForgeAudience');
       setIsAudienceLive(true);
-      toast({ 
-        title: "Audience Sync Active", 
-        description: "The external window is now slaved to your HUD navigation." 
-      });
     }
   };
 
@@ -151,35 +144,26 @@ export default function PresenterDashboard() {
   };
 
   const handleAISermonGen = async () => {
-    const token = localStorage.getItem('google_access_token');
+    const token = localStorage.getItem('studyforge_dev_token') || localStorage.getItem('google_access_token');
     if (!token) {
-      toast({ variant: 'destructive', title: 'Connection Required', description: 'Please connect Google Drive in the sidebar first.' });
+      toast({ variant: 'destructive', title: 'Connection Required', description: 'Link Google Drive or use a Dev Token first.' });
       return;
     }
 
     try {
       setIsGenerating(true);
-      toast({ title: "Thinking...", description: "AI is outlining your sermon now." });
-      
       const data = await generateSermonSlides({ 
-        topic: "The Power of Grace", 
-        scripture: "Ephesians 2:8" 
+        topic: "The Path of Faith", 
+        scripture: "Hebrews 11:1" 
       });
-      
       const presentation = await createGoogleSlides(token, `AI Sermon: ${data.title}`);
       await addSlidesContent(token, presentation.presentationId, data.slides);
-      
       setSelectedFileId(presentation.presentationId);
       setRefreshKey(prev => prev + 1);
-      
-      toast({ title: "Sermon Ready!", description: "AI presentation created and saved to your Drive." });
+      toast({ title: "Sermon Ready!" });
     } catch (err: any) {
       console.error("AI Slide Gen Error:", err);
-      toast({ 
-        variant: 'destructive', 
-        title: 'Automation Failed', 
-        description: "Failed to sync slides to Drive. Please try again." 
-      });
+      toast({ variant: 'destructive', title: 'Sync Failed' });
     } finally {
       setIsGenerating(false);
     }
@@ -202,14 +186,12 @@ export default function PresenterDashboard() {
         </div>
 
         <div className="flex items-center gap-4">
-          {selectedFileId && (
+          {selectedFileId && !isLocalFile && (
             <Button 
               onClick={handleLaunchAudience}
               className={cn(
                 "font-black h-12 px-6 rounded-xl text-[10px] tracking-widest uppercase transition-all shadow-xl",
-                isAudienceLive 
-                  ? "bg-green-600 hover:bg-green-500 text-white shadow-green-500/20" 
-                  : "bg-red-600 hover:bg-red-500 text-white shadow-red-500/20"
+                isAudienceLive ? "bg-green-600 text-white shadow-green-500/20" : "bg-red-600 text-white shadow-red-500/20"
               )}
             >
               <Radio className={cn("mr-2 h-4 w-4", isAudienceLive && "animate-pulse")} /> 
@@ -222,7 +204,7 @@ export default function PresenterDashboard() {
               onClick={handleAISermonGen} 
               disabled={isGenerating}
               variant="outline" 
-              className="border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 h-12 px-4 font-black text-[10px] tracking-widest rounded-xl"
+              className="border-blue-500/30 bg-blue-500/10 text-blue-400 h-12 px-4 font-black text-[10px] tracking-widest rounded-xl"
             >
               {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               AI GEN
@@ -246,230 +228,122 @@ export default function PresenterDashboard() {
       </header>
 
       <main className="flex-grow flex overflow-hidden relative">
-        
         <aside className={cn(
           "bg-slate-900 flex flex-col border-r border-white/5 transition-all duration-300 ease-in-out",
-          isLibraryVisible ? "w-1/4 min-w-[350px] opacity-100" : "w-0 min-w-0 opacity-0 pointer-events-none"
+          isLibraryVisible ? "w-1/4 min-w-[350px]" : "w-0 min-w-0 overflow-hidden"
         )}>
           <GoogleDriveExplorer key={refreshKey} onFileSelect={setSelectedFileId} />
         </aside>
 
-        <section className="flex-grow bg-black flex flex-col relative overflow-hidden transition-all duration-300">
-          
-          {/* Library Grabber Button */}
+        <section className="flex-grow bg-black flex flex-col relative overflow-hidden">
           <button
             onClick={() => setIsLibraryVisible(!isLibraryVisible)}
-            className={cn(
-              "absolute left-0 top-1/2 -translate-y-1/2 z-[70] h-20 w-6 flex items-center justify-center bg-slate-900/80 backdrop-blur-md border border-l-0 border-white/10 rounded-r-xl transition-all hover:bg-blue-600 text-white/40 hover:text-white shadow-2xl",
-              !isLibraryVisible && "hover:w-8"
-            )}
-            title={isLibraryVisible ? "Hide Library" : "Show Library"}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-[70] h-20 w-6 flex items-center justify-center bg-slate-900/80 backdrop-blur-md border border-l-0 border-white/10 rounded-r-xl transition-all hover:bg-blue-600 text-white/40 hover:text-white"
           >
             {isLibraryVisible ? <ChevronLeft className="size-4" /> : <ChevronRight className="size-4" />}
           </button>
 
-          {/* Notes Grabber Button */}
           <button
             onClick={() => setIsNotesVisible(!isNotesVisible)}
-            className={cn(
-              "absolute right-0 top-1/2 -translate-y-1/2 z-[70] h-20 w-6 flex items-center justify-center bg-slate-900/80 backdrop-blur-md border border-r-0 border-white/10 rounded-l-xl transition-all hover:bg-blue-600 text-white/40 hover:text-white shadow-2xl",
-              !isNotesVisible && "hover:w-8"
-            )}
-            title={isNotesVisible ? "Hide Teleprompter" : "Show Teleprompter"}
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-[70] h-20 w-6 flex items-center justify-center bg-slate-900/80 backdrop-blur-md border border-r-0 border-white/10 rounded-l-xl transition-all hover:bg-blue-600 text-white/40 hover:text-white"
           >
             {isNotesVisible ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
           </button>
 
-          {slidesUrl ? (
-            <>
-              <div className="absolute top-6 right-6 z-[60] flex gap-3">
-                <Button 
-                  onClick={handleLaunchAudience}
-                  variant="secondary"
-                  className="bg-blue-600/90 hover:bg-blue-600 text-white font-black border-none h-10 px-4 rounded-xl shadow-2xl text-[10px] tracking-widest"
-                >
-                  <Maximize2 className="mr-2 h-4 w-4" /> {isAudienceLive ? "REFRESH SYNC" : "POP OUT"}
-                </Button>
-              </div>
-              
+          {selectedFileId ? (
+            <div className="flex-grow flex flex-col">
               <div className="flex-grow relative bg-slate-950 flex items-center justify-center">
-                <iframe 
-                  src={slidesUrl}
-                  className="w-full h-full border-none shadow-2xl"
-                  allowFullScreen
-                />
-
-                {/* Navigation Overlays */}
-                <div className="absolute inset-y-0 left-0 w-24 flex items-center justify-center group z-40">
-                  <Button 
-                    variant="ghost" 
-                    onClick={goToPrevSlide}
-                    disabled={currentSlideIndex === 0}
-                    className="size-16 rounded-full bg-black/40 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity text-white hover:bg-black/60 border border-white/10"
-                  >
-                    <ChevronLeft className="size-10" />
-                  </Button>
-                </div>
-                <div className="absolute inset-y-0 right-0 w-24 flex items-center justify-center group z-40">
-                  <Button 
-                    variant="ghost" 
-                    onClick={goToNextSlide}
-                    disabled={currentSlideIndex >= (speakerNotes.length || 1) - 1}
-                    className="size-16 rounded-full bg-black/40 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity text-white hover:bg-black/60 border border-white/10"
-                  >
-                    <ChevronRight className="size-10" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Navigation Control Bar */}
-              <div className="h-24 bg-slate-950 border-t border-white/10 flex items-center justify-center gap-12 px-12 z-50">
-                <Button 
-                  onClick={goToPrevSlide}
-                  disabled={currentSlideIndex === 0}
-                  variant="outline"
-                  className="h-14 px-8 border-white/10 hover:bg-white/5 font-black uppercase tracking-widest text-[10px] rounded-xl"
-                >
-                  <ChevronLeft className="mr-2 h-5 w-5" /> PREVIOUS
-                </Button>
-
-                <div className="flex flex-col items-center gap-1 min-w-[140px]">
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-500">Slide Progress</span>
-                  <div className="text-3xl font-black text-white tabular-nums">
-                    {currentSlideIndex + 1} <span className="text-white/20 text-xl font-medium">/ {speakerNotes.length || '?'}</span>
+                {isLocalFile ? (
+                  <div className="text-center space-y-8 p-12 max-w-lg">
+                    <div className="bg-blue-600/10 p-12 rounded-[3rem] border border-blue-500/20 inline-block">
+                      <HardDrive className="size-20 text-blue-500 animate-pulse" />
+                    </div>
+                    <div className="space-y-4">
+                      <h2 className="text-3xl font-black uppercase tracking-tighter">Local Mode Active</h2>
+                      <p className="text-sm text-white/40 leading-relaxed">
+                        This file is stored in your browser session. Sync to your Google Drive to enable cloud embedding and audience tracking.
+                      </p>
+                    </div>
                   </div>
+                ) : (
+                  <iframe src={slidesUrl!} className="w-full h-full border-none" allowFullScreen />
+                )}
+              </div>
+
+              {!isLocalFile && (
+                <div className="h-24 bg-slate-950 border-t border-white/10 flex items-center justify-center gap-12 px-12 z-50">
+                  <Button onClick={goToPrevSlide} disabled={currentSlideIndex === 0} variant="outline" className="h-14 px-8 border-white/10 font-black uppercase tracking-widest text-[10px] rounded-xl">
+                    <ChevronLeft className="mr-2 h-5 w-5" /> PREVIOUS
+                  </Button>
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-500">Progress</span>
+                    <div className="text-3xl font-black text-white tabular-nums">
+                      {currentSlideIndex + 1} <span className="text-white/20 text-xl font-medium">/ {speakerNotes.length || '?'}</span>
+                    </div>
+                  </div>
+                  <Button onClick={goToNextSlide} disabled={currentSlideIndex >= (speakerNotes.length || 1) - 1} className="h-14 px-12 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-xl shadow-blue-500/20">
+                    NEXT SLIDE <ChevronRight className="ml-2 h-5 w-5" />
+                  </Button>
                 </div>
-
-                <Button 
-                  onClick={goToNextSlide}
-                  disabled={currentSlideIndex >= (speakerNotes.length || 1) - 1}
-                  className="h-14 px-12 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-xl shadow-blue-500/20"
-                >
-                  NEXT SLIDE <ChevronRight className="ml-2 h-5 w-5" />
-                </Button>
-              </div>
-
-              <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-[60] w-full max-w-sm">
-                <Alert className={cn(
-                  "bg-black/80 backdrop-blur-xl border-blue-500/20 text-white rounded-2xl shadow-2xl transition-colors",
-                  isAudienceLive && "border-green-500/40"
-                )}>
-                  <Gamepad2 className={cn("h-4 w-4", isAudienceLive ? "text-green-400" : "text-blue-400")} />
-                  <AlertTitle className={cn("text-[10px] font-black uppercase tracking-widest", isAudienceLive ? "text-green-400" : "text-blue-400")}>
-                    {isAudienceLive ? "Audience SYNC Active" : "HUD Sync Ready"}
-                  </AlertTitle>
-                  <AlertDescription className="text-[9px] font-bold text-white/60">
-                    {isAudienceLive ? "External window is currently tracking your navigation." : "Launch audience view to enable real-time tracking."}
-                  </AlertDescription>
-                </Alert>
-              </div>
-            </>
+              )}
+            </div>
           ) : (
             <div className="flex-grow flex flex-col items-center justify-center text-center p-12 space-y-8">
-              <div className="p-12 bg-slate-900 rounded-[3rem] border border-white/5 shadow-inner">
+              <div className="p-12 bg-slate-900 rounded-[3rem] border border-white/5">
                 <Monitor className="size-20 text-white/5" />
               </div>
-              <div className="space-y-4">
-                <h3 className="text-2xl font-black text-white/20 uppercase tracking-[0.3em]">
-                  Select Content
-                </h3>
-                <p className="text-sm text-white/10 max-w-xs italic font-medium">
-                  {isGoogleConnected 
-                    ? "Choose a sermon from your library or use AI to generate a fresh outline."
-                    : "Connect your Workspace in the sidebar to synchronize your sermon archive."}
-                </p>
-              </div>
+              <h3 className="text-2xl font-black text-white/20 uppercase tracking-[0.3em]">Ready for Input</h3>
             </div>
           )}
         </section>
 
         <aside className={cn(
           "bg-slate-950 flex flex-col relative border-l border-white/5 transition-all duration-300 ease-in-out",
-          isNotesVisible ? "w-1/4 min-w-[350px] opacity-100" : "w-0 min-w-0 opacity-0 pointer-events-none"
+          isNotesVisible ? "w-1/4 min-w-[350px]" : "w-0 min-w-0 overflow-hidden"
         )}>
           <Tabs defaultValue="notes" className="flex flex-col h-full">
             <div className="p-4 border-b border-white/5 bg-slate-900/50">
               <TabsList className="grid w-full grid-cols-2 bg-black/40 p-1 rounded-xl">
-                <TabsTrigger value="notes" className="text-[10px] font-black uppercase tracking-widest rounded-lg">
-                  <FileText className="mr-2 h-3 w-3" /> Notes
-                </TabsTrigger>
-                <TabsTrigger value="bible" className="text-[10px] font-black uppercase tracking-widest rounded-lg">
-                  <BookOpen className="mr-2 h-3 w-3" /> Bible
-                </TabsTrigger>
+                <TabsTrigger value="notes" className="text-[10px] font-black uppercase tracking-widest rounded-lg">Notes</TabsTrigger>
+                <TabsTrigger value="bible" className="text-[10px] font-black uppercase tracking-widest rounded-lg">Bible</TabsTrigger>
               </TabsList>
             </div>
-
             <TabsContent value="notes" className="flex-grow flex flex-col m-0 overflow-hidden">
-              <div className="p-6 flex items-center justify-between border-b border-white/5 bg-slate-900/10">
-                <h2 className="text-[10px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-2">
-                  <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse" />
-                  Teleprompter
-                </h2>
-                <span className="text-[9px] font-mono font-bold text-white/20 uppercase">
-                  Slide {currentSlideIndex + 1}
-                </span>
-              </div>
-              
               <ScrollArea className="flex-grow p-8">
                 {loadingNotes ? (
                   <div className="flex flex-col items-center justify-center h-full py-20 space-y-4 opacity-50">
                     <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                    <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Synchronizing Notes...</p>
+                    <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Syncing...</p>
                   </div>
                 ) : speakerNotes.length > 0 ? (
-                  <div className="space-y-6">
-                    <p className="text-2xl font-medium leading-relaxed text-white/90 whitespace-pre-wrap font-body selection:bg-blue-600">
-                      {speakerNotes[currentSlideIndex]}
-                    </p>
-                  </div>
+                  <p className="text-2xl font-medium leading-relaxed text-white/90 whitespace-pre-wrap selection:bg-blue-600">
+                    {speakerNotes[currentSlideIndex]}
+                  </p>
                 ) : (
-                  <div className="text-center py-24 opacity-10 italic space-y-4">
-                    <FileText className="size-16 mx-auto" />
-                    <p className="text-[10px] font-black uppercase tracking-widest">No notes found.</p>
+                  <div className="text-center py-24 opacity-10 italic">
+                    <p className="text-[10px] font-black uppercase tracking-widest">No notes ready.</p>
                   </div>
                 )}
               </ScrollArea>
-              
-              {speakerNotes.length > 0 && (
-                <div className="p-6 border-t border-white/5 bg-slate-900/20 space-y-3">
-                   <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-white/20">
-                    <span>UP NEXT</span>
-                    <span>SLIDE {currentSlideIndex + 2}</span>
-                  </div>
-                  <p className="text-[11px] text-white/30 italic line-clamp-2">
-                    {speakerNotes[currentSlideIndex + 1] || "Conclusion of presentation."}
-                  </p>
-                </div>
-              )}
             </TabsContent>
-
             <TabsContent value="bible" className="flex-grow m-0">
-              <iframe 
-                src="https://www.biblegateway.com"
-                className="w-full h-full border-none opacity-80 hover:opacity-100 transition-opacity"
-                scrolling="yes"
-                title="Bible Reference"
-              />
+              <iframe src="https://www.biblegateway.com" className="w-full h-full border-none opacity-80" />
             </TabsContent>
           </Tabs>
         </aside>
-
       </main>
 
       <footer className="h-12 bg-black border-t border-white/5 flex items-center justify-between px-8 shrink-0">
         <div className="flex items-center gap-6 text-[10px] font-mono text-white/30 uppercase tracking-[0.2em]">
           <span className="flex items-center gap-2">
             <div className={`h-1.5 w-1.5 ${isGoogleConnected ? 'bg-green-500' : 'bg-red-500'} rounded-full`} />
-            {isGoogleConnected ? "Workspace Synchronized" : "Cloud Disconnected"}
+            {isGoogleConnected ? "Workspace Active" : "No Cloud Sync"}
           </span>
-          <span className="opacity-20">|</span>
           <span className="flex items-center gap-2">
             <Clock className="h-3 w-3" /> {currentTime || '--:--:--'}
           </span>
         </div>
-        <div className="text-[9px] font-black text-white/10 uppercase italic tracking-[0.4em]">
-          StudyForge v3.5 • Speaker Engine 2.0 • Slide Sync Active
-        </div>
+        <div className="text-[9px] font-black text-white/10 uppercase tracking-[0.4em]">StudyForge v3.5 • PLAN B ACTIVE</div>
       </footer>
     </div>
   );
