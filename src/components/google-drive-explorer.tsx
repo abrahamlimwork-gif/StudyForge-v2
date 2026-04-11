@@ -53,16 +53,12 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     } catch (error: any) {
       console.error("--- EXPLORER ERROR ---", error);
       if (error.status === 401) {
-        console.warn("--- EXPLORER: Token expired (401), clearing... ---");
+        console.warn("--- EXPLORER: Token invalid (401) ---");
         setHasToken(false);
         localStorage.removeItem('google_access_token');
-        toast({ 
-          variant: "destructive", 
-          title: "Session Expired", 
-          description: "Please re-link Google Drive." 
-        });
+        toast({ variant: "destructive", title: "Session Expired", description: "Please re-connect Google Drive." });
       } else {
-        setApiError(error.body || error.message);
+        setApiError(error.message || "Failed to load library.");
       }
     } finally {
       setLoading(false);
@@ -86,7 +82,10 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.setCustomParameters({ prompt: 'select_account' });
       
+      // Force persistence to ensure token isn't lost on refresh
       await setPersistence(auth, browserLocalPersistence);
+      
+      console.log("--- EXPLORER DEBUG: Launching Popup ---");
       const result = await signInWithPopup(auth, provider);
       
       const credential = GoogleAuthProvider.credentialFromResult(result);
@@ -99,7 +98,11 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
     } catch (err: any) {
       console.error("--- CONNECT POPUP ERROR ---", err.code, err.message);
       if (err.code === 'auth/popup-closed-by-user') {
-        toast({ title: "Login Cancelled", description: "Popup was closed before syncing." });
+        toast({ 
+          variant: "destructive", 
+          title: "Popup Blocked", 
+          description: "Browser blocked the sync window. Please enable popups." 
+        });
       } else {
         setApiError(err.message);
       }
@@ -120,7 +123,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         <ShieldAlert className="size-12 text-red-500 opacity-50" />
         <div className="space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Sync Failure</p>
-          <p className="text-[9px] font-mono text-white/40 max-w-[200px] leading-relaxed italic truncate">
+          <p className="text-[9px] font-mono text-white/40 max-w-[200px] leading-relaxed italic">
             {apiError}
           </p>
         </div>
@@ -136,7 +139,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         <div className="space-y-4">
           <h3 className="text-xl font-black uppercase tracking-tighter text-white/90">Library Locked</h3>
           <p className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] leading-relaxed">
-            Connect Google Drive to access your archive.
+            Link your Google Drive to browse your presentation archive.
           </p>
         </div>
         <Button onClick={handleConnectPopup} disabled={loading} className="w-full h-16 bg-blue-600 hover:bg-blue-500 rounded-[1.25rem] font-black uppercase text-xs shadow-2xl">
