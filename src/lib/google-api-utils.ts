@@ -1,11 +1,11 @@
+
 /**
  * Utility functions for interacting with Google Drive and Slides APIs.
- * Includes enhanced logging for audit purposes and folder management.
  */
 
 export async function fetchGoogleSlides(accessToken: string) {
   const query = encodeURIComponent("mimeType='application/vnd.google-apps.presentation' and trashed = false");
-  const fields = encodeURIComponent("files(id, name, modifiedTime, thumbnailLink)");
+  const fields = encodeURIComponent("files(id, name, modifiedTime)");
   
   const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${fields}`;
   
@@ -17,12 +17,7 @@ export async function fetchGoogleSlides(accessToken: string) {
 
   if (!response.ok) {
     const errorBody = await response.text();
-    // Explicitly log strings to avoid empty object serialization issues in some consoles
-    console.error(`Drive API Error Status: ${response.status}`);
-    console.error(`Drive API Error Text: ${response.statusText}`);
-    console.error(`Drive API Error Body: ${errorBody}`);
-    
-    const error: any = new Error(`Drive API Error: ${response.status}`);
+    const error: any = new Error(`Google API Error: ${response.status}`);
     error.status = response.status;
     error.body = errorBody;
     throw error;
@@ -53,70 +48,16 @@ export async function fetchSpeakerNotes(accessToken: string, presentationId: str
   
   return data.slides.map((slide: any) => {
     const notesPage = slide.notesPage;
-    if (!notesPage) return "No notes for this slide.";
+    if (!notesPage) return "";
     
     const notesElement = notesPage.pageElements?.find((el: any) => el.shape?.shapeType === 'SPEAKER_NOTES');
-    if (!notesElement || !notesElement.shape.text) return "No notes for this slide.";
+    if (!notesElement || !notesElement.shape.text) return "";
     
     return notesElement.shape.text.textElements
       .map((te: any) => te.textRun?.content || "")
       .join("")
       .trim();
   });
-}
-
-export async function getOrCreateLibraryFolder(accessToken: string) {
-  const folderName = 'StudyForge_Library';
-  const query = encodeURIComponent(`name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed = false`);
-  
-  const findResponse = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  
-  const findData = await findResponse.json();
-  if (findData.files && findData.files.length > 0) {
-    return findData.files[0].id;
-  }
-
-  const createResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      name: folderName,
-      mimeType: 'application/vnd.google-apps.folder',
-    }),
-  });
-
-  const createData = await createResponse.json();
-  return createData.id;
-}
-
-export async function uploadFileToDrive(accessToken: string, file: File, folderId: string) {
-  const metadata = {
-    name: file.name,
-    parents: [folderId],
-    mimeType: file.name.endsWith('.pptx') ? 'application/vnd.google-apps.presentation' : undefined
-  };
-
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file', file);
-
-  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: form,
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Upload failed: ${response.status} - ${errorBody}`);
-  }
-
-  return await response.json();
 }
 
 export async function createGoogleSlides(accessToken: string, title: string) {

@@ -37,7 +37,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   
   const { toast } = useToast();
   const auth = useAuth();
-  const redirectCheckRef = useRef(false);
+  const redirectProcessed = useRef(false);
 
   const loadFiles = async (token?: string) => {
     const accessToken = token || localStorage.getItem('google_access_token');
@@ -54,10 +54,15 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
       const googleFiles = await fetchGoogleSlides(accessToken);
       setFiles(googleFiles);
     } catch (error: any) {
+      console.error("--- EXPLORER ERROR ---", error);
       if (error.status === 401) {
-        console.warn("--- EXPLORER: Token expired (401) ---");
         setHasToken(false);
         localStorage.removeItem('google_access_token');
+        toast({ 
+          variant: "destructive", 
+          title: "Session Expired", 
+          description: "Please re-link your Google Drive to continue." 
+        });
       } else {
         setApiError(error.body || error.message);
       }
@@ -67,16 +72,13 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
   };
 
   useEffect(() => {
-    if (!auth || redirectCheckRef.current) return;
+    if (!auth || redirectProcessed.current) return;
 
-    const checkRedirect = async () => {
-      redirectCheckRef.current = true;
+    const handleRedirectResult = async () => {
+      redirectProcessed.current = true;
       try {
-        console.log("--- EXPLORER: Checking for redirect handshake ---");
         const result = await getRedirectResult(auth);
-        
         if (result) {
-          console.log("--- EXPLORER: Handshake captured! ---");
           const credential = GoogleAuthProvider.credentialFromResult(result);
           if (credential?.accessToken) {
             localStorage.setItem('google_access_token', credential.accessToken);
@@ -87,33 +89,36 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           }
         }
         
-        // No redirect result, check if we already have a token
+        // No redirect result found, check for existing valid token
         const existingToken = localStorage.getItem('google_access_token');
         if (existingToken) {
           setHasToken(true);
           loadFiles(existingToken);
         }
-      } catch (err) {
-        console.error("--- EXPLORER REDIRECT ERROR ---", err);
-        loadFiles();
+      } catch (err: any) {
+        console.error("--- REDIRECT ERROR ---", err);
+        if (err.code === 'auth/unauthorized-domain') {
+          setApiError(`Unauthorized domain: ${window.location.hostname}. Please add this to Firebase authorized domains.`);
+        }
       }
     };
 
-    checkRedirect();
+    handleRedirectResult();
   }, [auth]);
 
   const handleConnect = async () => {
     if (!auth) return;
     setLoading(true);
     try {
-      console.log("--- EXPLORER: Initiating secure redirect ---");
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/drive.file');
+      provider.setCustomParameters({ prompt: 'select_account' });
+      
       await setPersistence(auth, browserLocalPersistence);
       await signInWithRedirect(auth, provider);
     } catch (err: any) {
-      console.error("--- EXPLORER CONNECT ERROR ---", err);
-      toast({ variant: 'destructive', title: 'Handshake Failed', description: err.message });
+      console.error("--- CONNECT ERROR ---", err);
+      toast({ variant: 'destructive', title: 'Connection Failed', description: err.message });
       setLoading(false);
     }
   };
@@ -130,8 +135,8 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         <ShieldAlert className="size-12 text-red-500 opacity-50" />
         <div className="space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Sync Failure</p>
-          <p className="text-[9px] font-mono text-white/40 max-w-[200px] leading-relaxed">
-            The Google API rejected the connection. You may need to re-authenticate.
+          <p className="text-[9px] font-mono text-white/40 max-w-[200px] leading-relaxed italic">
+            {apiError}
           </p>
         </div>
         <Button variant="outline" onClick={handleConnect} className="border-white/10 text-[9px] font-black uppercase tracking-widest h-10 px-6 rounded-xl">Re-Connect</Button>
@@ -149,11 +154,11 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
         <div className="space-y-4">
           <h3 className="text-xl font-black uppercase tracking-tighter text-white/90">Workspace Locked</h3>
           <p className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] leading-relaxed">
-            Identity verification required to synchronize your archive.
+            Link your Google account to access your sermon archive.
           </p>
         </div>
         <Button onClick={handleConnect} disabled={loading} className="w-full h-16 bg-blue-600 hover:bg-blue-500 rounded-[1.25rem] font-black uppercase text-xs shadow-2xl shadow-blue-600/20">
-          {loading ? <Loader2 className="animate-spin" /> : <><ArrowRight className="mr-2 h-4 w-4" /> Link Google Drive</>}
+          {loading ? <Loader2 className="animate-spin" /> : <><ArrowRight className="mr-2 h-4 w-4" /> Sync Drive</>}
         </Button>
       </div>
     );
@@ -172,7 +177,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
 
       <div className="p-4 flex gap-2">
         <Input 
-          placeholder="Presentation ID..." 
+          placeholder="Slide ID..." 
           className="h-12 text-xs bg-black/40 border-white/10 text-white font-mono rounded-xl focus:ring-blue-500/20"
           value={manualId}
           onChange={(e) => setManualId(e.target.value)}
@@ -187,7 +192,7 @@ export function GoogleDriveExplorer({ onFileSelect }: { onFileSelect: (id: strin
           {files.length === 0 && !loading && (
             <div className="py-20 text-center space-y-4 opacity-10">
               <FileText className="size-16 mx-auto" />
-              <p className="text-[10px] font-black uppercase tracking-widest">Archive Empty</p>
+              <p className="text-[10px] font-black uppercase tracking-widest">No Slides Found</p>
             </div>
           )}
           {files.map((file) => (
