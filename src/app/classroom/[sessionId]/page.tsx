@@ -30,7 +30,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleDriveExplorer } from '@/components/google-drive-explorer';
-import { BibleViewer } from '@/components/bible-viewer';
+import { BibleViewer } from "@/components/bible-viewer";
+import { MapSystem } from "@/components/map/map-system";
 import { generateSermonSlides } from '@/ai/flows/generate-sermon-slides';
 import { createGoogleSlides, addSlidesContent } from '@/lib/google-api-utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -499,9 +500,10 @@ export default function PresenterDashboard() {
 
           <Tabs defaultValue="notes" className="flex flex-col flex-grow overflow-hidden">
             <div className="shrink-0 p-2 border-b border-white/5 bg-slate-900/50">
-              <TabsList className="grid w-full grid-cols-2 bg-black/40 p-1 rounded-xl font-bold">
+              <TabsList className="grid w-full grid-cols-3 bg-black/40 p-1 rounded-xl font-bold">
                 <TabsTrigger value="notes" className="text-[10px] font-black uppercase tracking-widest rounded-lg">Notes</TabsTrigger>
                 <TabsTrigger value="bible" className="text-[10px] font-black uppercase tracking-widest rounded-lg">Bible</TabsTrigger>
+                <TabsTrigger value="map" className="text-[10px] font-black uppercase tracking-widest rounded-lg">Map</TabsTrigger>
               </TabsList>
             </div>
             <TabsContent value="notes" className="flex-grow flex flex-col m-0 overflow-hidden bg-slate-950">
@@ -591,6 +593,9 @@ export default function PresenterDashboard() {
                 sidebarWidth={notesWidth}
                 onToggleFocus={() => setIsBibleFocused(!isBibleFocused)} 
               />
+            </TabsContent>
+            <TabsContent value="map" className="flex-grow flex flex-col m-0 overflow-hidden bg-[#02040a]">
+              <MapSystem />
             </TabsContent>
           </Tabs>
         </aside>
